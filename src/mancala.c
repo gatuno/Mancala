@@ -54,7 +54,6 @@
 #include "background.h"
 #include "juego.h"
 //#include "netplay.h"
-#include "cp-button.h"
 //#include "chat.h"
 //#include "inputbox.h"
 //#include "utf8.h"
@@ -114,7 +113,9 @@ const char *images_names[NUM_IMAGES] = {
 	"images/stone5_4.png",
 	"images/stone5_5.png",
 	"images/stone5_6.png",
-	"images/stone5_7.png"
+	"images/stone5_7.png",
+	
+	"images/flecha.png"
 };
 
 const char *sound_names[NUM_SOUNDS] = {
@@ -150,7 +151,7 @@ int server_port;
 char nick_global[NICK_SIZE];
 static int nick_default;
 
-TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy, *ttf20_comiccrazy;
+TTF_Font *ttf16_burbank_small;
 
 void render_nick (void) {
 	SDL_Color blanco, negro;
@@ -160,11 +161,11 @@ void render_nick (void) {
 	
 	negro.r = negro.g = negro.b = 0;
 	blanco.r = blanco.g = blanco.b = 255;
-	nick_image = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
+	//nick_image = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
 	
 	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xff;
 	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
-	nick_image_blue = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
+	//nick_image_blue = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
 }
 
 #if 0
@@ -292,7 +293,6 @@ int main (int argc, char *argv[]) {
 	
 	server_port = 3300;
 	
-	cp_button_start ();
 	do {
 		if (game_loop () == GAME_QUIT) break;
 	} while (1 == 0);
@@ -309,7 +309,6 @@ int game_loop (void) {
 	SDLKey key;
 	Uint32 last_time, now_time;
 	SDL_Rect rect, rect2;
-	int *map = NULL;
 	
 	int g, h;
 	int start = 0;
@@ -502,18 +501,19 @@ void setup (void) {
 		exit (1);
 	}
 	
-	sprintf (buffer_file, "%s%s", systemdata_path, "burbankbm.ttf");
-	ttf16_burbank_medium = TTF_OpenFont (buffer_file, 16);
+	sprintf (buffer_file, "%s%s", systemdata_path, "burbanksb.ttf");
+	ttf16_burbank_small = TTF_OpenFont (buffer_file, 16);
 	
-	if (!ttf16_burbank_medium) {
+	if (!ttf16_burbank_small) {
 		fprintf (stderr,
-			"Failed to load font file 'Burbank Medium Bold'\n"
+			"Failed to load font file 'Burbank Small Bold'\n"
 			"The error returned by SDL is:\n"
 			"%s\n", TTF_GetError ());
 		SDL_Quit ();
 		exit (1);
 	}
 	
+	#if 0
 	sprintf (buffer_file, "%s%s", systemdata_path, "ccfacefront.ttf");
 	ttf14_facefront = TTF_OpenFont (buffer_file, 14);
 	if (!ttf14_facefront) {
@@ -551,6 +551,7 @@ void setup (void) {
 	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xff;
 	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
 	text_waiting = draw_text_with_shadow (ttf16_comiccrazy, 2, "Connecting...", blanco, negro);
+	#endif
 	
 	setup_background ();
 	srand (SDL_GetTicks ());

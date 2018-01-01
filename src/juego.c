@@ -39,7 +39,6 @@
 #include "mancala.h"
 #include "juego.h"
 //#include "netplay.h"
-#include "cp-button.h"
 #include "draw-text.h"
 //#include "message.h"
 #include "ventana.h"
@@ -91,13 +90,33 @@ const float stones_offsets[5][2] = {
 	{ -8.00, -30.70}
 };
 
+const int hint_pos[14][2] = {
+	{ 59, 106},
+	{ 87, 106},
+	{115, 106}, /* 136 - 25 + 4  */ /* 124 - 38 + 20 */
+	{143, 106},
+	{171, 106},
+	{199, 106},
+	
+	{226, 91},
+	
+	{199, 77},
+	{171, 77},
+	{143, 77},
+	{115, 77},
+	{ 87, 77},
+	{ 59, 77},
+	
+	{ 31, 91}
+};
+
 static Juego *network_game_list = NULL;
 
 Juego *get_game_list (void) {
 	return network_game_list;
 }
 
-void juego_first_time_draw (Juego  *j) {
+void juego_draw_board (Juego *j) {
 	SDL_Surface *surface;
 	SDL_Rect rect;
 	int g, h;
@@ -105,11 +124,14 @@ void juego_first_time_draw (Juego  *j) {
 	
 	surface = window_get_surface (j->ventana);
 	
-	SDL_FillRect (surface, NULL, 0); /* Transparencia total */
+	/* Borrar la ventana */
+	rect.x = 14;
+	rect.y = 30;
+	rect.w = images[IMG_PLAYER_1_NORMAL]->w;
+	rect.h = images[IMG_PLAYER_1_NORMAL]->h * 2;
 	
-	SDL_SetAlpha (images[IMG_WINDOW], 0, 0);
-	
-	SDL_BlitSurface (images[IMG_WINDOW], NULL, surface, NULL);
+	window_update (j->ventana, &rect);
+	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
 	
 	/* Dibujar la parte de arriba */
 	rect.x = 14;
@@ -150,7 +172,79 @@ void juego_first_time_draw (Juego  *j) {
 			stone = stone->next;
 		}
 	}
+}
+
+void juego_first_time_draw (Juego  *j) {
+	SDL_Surface *surface;
+	
+	surface = window_get_surface (j->ventana);
+	
+	SDL_FillRect (surface, NULL, 0); /* Transparencia total */
+	
+	SDL_SetAlpha (images[IMG_WINDOW], 0, 0);
+	
+	SDL_BlitSurface (images[IMG_WINDOW], NULL, surface, NULL);
+	
+	juego_draw_board (j);
+	
 	window_flip (j->ventana);
+}
+
+static int juego_draw_hint (Ventana *v) {
+	Juego *j;
+	SDL_Rect rect, rect2;
+	SDL_Surface *surface, *texto;
+	SDL_Color negro;
+	char buffer[20];
+	
+	j = (Juego *) window_get_data (v);
+	surface = window_get_surface (v);
+	
+	if (j->hint == -1) {
+		return FALSE;
+	}
+	
+	j->hint_frame++;
+	
+	if (j->hint_frame > 6) {
+		return FALSE;
+	}
+	
+	if (j->hint_frame < 3) {
+		/* Aún no hay nada que dibujar */
+		return TRUE;
+	}
+	
+	juego_draw_board (j);
+	
+	/* Taza 2: 136.25, 124.25 */
+	rect.x = hint_pos[j->hint][0]; /* 136 - 25 + 4  */
+	rect.y = hint_pos[j->hint][1]; /* 124 - 38 + 20 */
+	rect.w = images[IMG_FLECHA]->w / 4;
+	rect.h = images[IMG_FLECHA]->h / 2;
+	
+	rect2.x = rect.w * (j->hint_frame - 3);
+	rect2.y = rect.h;
+	rect2.w = rect.w;
+	rect2.h = rect.h;
+	
+	SDL_BlitSurface (images[IMG_FLECHA], &rect2, surface, &rect);
+	
+	if (j->hint_frame == 6) {
+		/* Renderizar el número */
+		sprintf (buffer, "%i", j->mapa[j->hint]);
+		negro.r = negro.g = negro.b = 255;
+		texto = TTF_RenderUTF8_Blended (ttf16_burbank_small, buffer, negro);
+	
+		rect.x = hint_pos[j->hint][0] + 25 - (texto->w / 2);
+		rect.y = 10 + hint_pos[j->hint][1];
+		rect.w = texto->w;
+		rect.h = texto->h;
+	
+		SDL_BlitSurface (texto, NULL, surface, &rect);
+	}
+	
+	return TRUE;
 }
 
 Juego *crear_juego (int top_window) {
@@ -176,6 +270,8 @@ Juego *crear_juego (int top_window) {
 	j->mapa[7] = j->mapa[8] = j->mapa[9] = j->mapa[10] = j->mapa[11] = j->mapa[12] = 4;
 	
 	j->mapa[6] = j->mapa[13] = 10;
+	j->hint = -1;
+	j->hint_frame = 0;
 	
 	/* Armar el tablero */
 	color = 0;
@@ -323,40 +419,68 @@ int juego_mouse_down (Ventana *v, int x, int y) {
 
 int juego_mouse_motion (Ventana *v, int x, int y) {
 	Juego *j;
-	int old_resalte;
-	#if 0
+	int new_hint;
+	
 	j = (Juego *) window_get_data (v);
 	
-	/* Primero, quitar el resalte */
-	old_resalte = j->resalte;
+	new_hint = -1;
 	
-	j->resalte = -1;
-	
-	/* Si es nuestro turno, hacer resalte */
-	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio && j->estado == NET_READY) {
-		/* Está dentro del tablero */
-		if (x >= 32 && x < 56 && j->tablero[0][0] == 0) {
-			/* Primer fila de resalte */
-			j->resalte = 0;
-		} else if (x >= 56 && x < 81 && j->tablero[0][1] == 0) {
-			j->resalte = 1;
-		} else if (x >= 81 && x < 105 && j->tablero[0][2] == 0) {
-			j->resalte = 2;
-		} else if (x >= 105 && x < 129 && j->tablero[0][3] == 0) {
-			j->resalte = 3;
-		} else if (x >= 129 && x < 153 && j->tablero[0][4] == 0) {
-			j->resalte = 4;
-		} else if (x >= 153 && x < 178 && j->tablero[0][5] == 0) {
-			j->resalte = 5;
-		} else if (x >= 178 && x < 206 && j->tablero[0][6] == 0) {
-			j->resalte = 6;
+	if (x >= 42 && x < 67 && y >= 105 && y < 155) {
+		new_hint = 13;
+	} else if (x >= 239 && x < 264 && y >= 105 && y < 155) {
+		new_hint = 6;
+	} else if (y >= 100 && y < 130) {
+		if (x >= 69 && x < 97) { // 99
+			new_hint = 12;
+		} else if (x >= 97 && x < 125) { // 127
+			new_hint = 11;
+		} else if (x >= 125 && x < 153) { //155
+			/* Hint de la taza 2 */
+			new_hint = 10;
+		} else if (x >= 153 && x < 183) {
+			new_hint = 9;
+		} else if (x >= 183 && x < 211) {
+			new_hint = 8;
+		} else if (x >= 212 && x < 239) {
+			new_hint = 7;
+		}
+	} else if (y >= 130 && y < 159) {
+		if (x >= 69 && x < 97) { // 99
+			new_hint = 0;
+		} else if (x >= 97 && x < 125) { // 127
+			new_hint = 1;
+		} else if (x >= 125 && x < 153) { //155
+			/* Hint de la taza 2 */
+			new_hint = 2;
+		} else if (x >= 153 && x < 183) {
+			new_hint = 3;
+		} else if (x >= 183 && x < 211) {
+			new_hint = 4;
+		} else if (x >= 212 && x < 239) {
+			new_hint = 5;
 		}
 	}
 	
-	if (old_resalte != j->resalte) {
-		juego_dibujar_resalte (j);
+	if (new_hint != -1 && new_hint != j->hint) {
+		/* Activar el timer para dibujar el hint de la taza */
+		j->hint = new_hint;
+		j->hint_frame = 0;
+		
+		window_register_timer_events (v, juego_draw_hint);
+		window_enable_timer (v);
+		
+		//printf ("Activando hint\n");
+		return TRUE;
+	} else if (new_hint == -1) {
+		//printf ("Desactivando hint\n");
+		j->hint = -1;
+		window_disable_timer (v);
+		
+		/* Redibujar el tablero para borrar los hints */
+		juego_draw_board (j);
 	}
 	
+	#if 0
 	/* En caso contrario, buscar si el mouse está en el botón de cierre */
 	if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		/* FIXME: Arreglar lo de los botones */

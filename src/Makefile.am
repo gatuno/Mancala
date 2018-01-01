@@ -5,7 +5,6 @@ gamedatadir = $(pkgdatadir)/data
 bin_PROGRAMS = mancala
 mancala_SOURCES = mancala.c mancala.h \
 	resolv.c resolv.h \
-	cp-button.c cp-button.h \
 	juego.c juego.h \
 	draw-text.c draw-text.h \
 	path.c path.h \

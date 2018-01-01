@@ -53,6 +53,9 @@ typedef struct _Juego {
 	
 	MancalaStone *tablero[14];
 	
+	int hint;
+	int hint_frame;
+	
 	struct _Juego *next;
 } Juego;
 

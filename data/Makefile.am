@@ -47,9 +47,8 @@ nobase_dist_gamedata_DATA = images/board.png \
 	images/stone5_5.png \
 	images/stone5_6.png \
 	images/stone5_7.png \
-	ccfacefront.ttf \
-	burbankbm.ttf \
-	comicrazy.ttf
+	images/flecha.png \
+	burbanksb.ttf
 
 # Instalar los archivos .desktop e iconos
 #applicationsdir = $(datadir)/applications

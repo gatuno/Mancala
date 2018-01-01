@@ -94,6 +94,8 @@ enum {
 	IMG_STONE_5_6,
 	IMG_STONE_5_7,
 	
+	IMG_FLECHA,
+	
 	NUM_IMAGES
 };
 
@@ -112,10 +114,8 @@ extern SDL_Surface * text_waiting;
 extern int use_sound;
 extern Mix_Chunk * sounds[NUM_SOUNDS];
 
-extern TTF_Font *ttf16_burbank_medium, *ttf14_facefront, *ttf16_comiccrazy, *ttf20_comiccrazy;
+extern TTF_Font *ttf16_burbank_small;
 void nueva_conexion (void *ib, const char *texto);
-
-//void findfour_default_keyboard_handler (SDL_KeyboardEvent *key);
 
 #endif /* __FINDFOUR_H__ */
 
