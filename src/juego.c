@@ -51,6 +51,13 @@ enum {
 	JUEGO_NUM_BUTTONS
 };
 
+enum {
+	ANIM_NONE = 0,
+	ANIM_RAISE_STONE,
+	ANIM_MOVE,
+	ANIM_WAIT_DROP
+};
+
 int juego_mouse_down (Ventana *v, int x, int y);
 int juego_mouse_motion (Ventana *v, int x, int y);
 int juego_mouse_up (Ventana *v, int x, int y);
@@ -116,10 +123,30 @@ Juego *get_game_list (void) {
 	return network_game_list;
 }
 
+static int juego_check_next_cup (Juego *j, int next_cup) {
+	int mancala_enemiga;
+	
+	if (j->turno == 0) {
+		mancala_enemiga = 13;
+	} else {
+		mancala_enemiga = 6;
+	}
+	
+	if (next_cup == mancala_enemiga) {
+		next_cup++;
+	}
+	
+	if (next_cup > 13) {
+		next_cup = 0;
+	}
+	
+	return next_cup;
+}
+
 void juego_draw_board (Juego *j) {
 	SDL_Surface *surface;
 	SDL_Rect rect;
-	int g, h;
+	int g, h, i;
 	MancalaStone *stone;
 	
 	surface = window_get_surface (j->ventana);
@@ -157,13 +184,37 @@ void juego_draw_board (Juego *j) {
 	SDL_BlitSurface (images[IMG_BOARD], NULL, surface, &rect);
 	
 	/* Dibujar las piedras */
-	for (g = 0; g < 14; g++) {
+	for (g = 13; g >= 0; g--) {
 		stone = j->tablero[g];
 		
 		while (stone != NULL) {
 			rect.x = 14.0 + stone->x + stones_offsets[stone->color][0];
 			rect.y = 30.5 + stone->y + stones_offsets[stone->color][1];
-			h = IMG_STONE_1_0 + (stone->color * 8);
+			i = 0;
+			if (stone->frame == 1) {
+				i = 0;
+			} else if (stone->frame == 2) {
+				i = 1;
+			} else if (stone->frame == 3) {
+				i = 2;
+			} else if (stone->frame == 4) {
+				i = 3;
+			} else if (stone->frame == 5) {
+				i = 4;
+			} else if (stone->frame == 6) {
+				i = 4;
+				stone->frame++;
+			} else if (stone->frame == 7) {
+				i = 5;
+				stone->frame++;
+			} else if (stone->frame == 8) {
+				i = 6;
+				stone->frame++;
+			} else if (stone->frame == 9) {
+				i = 7;
+				stone->frame = 0;
+			}
+			h = IMG_STONE_1_0 + i + (stone->color * 8);
 			rect.w = images[h]->w;
 			rect.h = images[h]->h;
 			
@@ -171,6 +222,29 @@ void juego_draw_board (Juego *j) {
 			
 			stone = stone->next;
 		}
+	}
+	
+	/* Dibujar las piedras en la mano */
+	stone = j->mano;
+	
+	while (stone != NULL) {
+		rect.x = 14.0 + stone->x + stones_offsets[stone->color][0];
+		rect.y = 30.5 + stone->y + stones_offsets[stone->color][1];
+		if (stone->frame == 1 || stone->frame == 2) {
+			i = 1;
+		} else if (stone->frame == 3 || stone->frame == 4) {
+			i = 2;
+		} else {
+			i = 3;
+		}
+		
+		h = IMG_STONE_1_0 + i + (stone->color * 8);
+		rect.w = images[h]->w;
+		rect.h = images[h]->h;
+		
+		SDL_BlitSurface (images[h], NULL, surface, &rect);
+		
+		stone = stone->next;
 	}
 }
 
@@ -228,12 +302,22 @@ static int juego_draw_hint (Ventana *v) {
 	rect2.w = rect.w;
 	rect2.h = rect.h;
 	
+	negro.r = negro.g = negro.b = 255;
+	
+	if (j->turno == 0 && j->inicio == 0 && j->hint >= 0 && j->hint < 6) {
+		rect2.y = 0;
+		negro.r = negro.g = negro.b = 0;
+	} else if (j->turno == 1 && j->inicio == 1 && j->hint > 6 && j->hint < 13) {
+		rect2.y = 0;
+		negro.r = negro.g = negro.b = 0;
+	}
+	
 	SDL_BlitSurface (images[IMG_FLECHA], &rect2, surface, &rect);
 	
 	if (j->hint_frame == 6) {
 		/* Renderizar el número */
 		sprintf (buffer, "%i", j->mapa[j->hint]);
-		negro.r = negro.g = negro.b = 255;
+		
 		texto = TTF_RenderUTF8_Blended (ttf16_burbank_small, buffer, negro);
 	
 		rect.x = hint_pos[j->hint][0] + 25 - (texto->w / 2);
@@ -242,6 +326,115 @@ static int juego_draw_hint (Ventana *v) {
 		rect.h = texto->h;
 	
 		SDL_BlitSurface (texto, NULL, surface, &rect);
+	}
+	
+	return TRUE;
+}
+
+static int juego_move_stones (Ventana *v) {
+	Juego *j;
+	SDL_Surface *surface;
+	MancalaStone *stone, *current_stone, **prev_stone;
+	float loc8;
+	int g, h;
+	
+	j = (Juego *) window_get_data (v);
+	surface = window_get_surface (v);
+	if (j->anim == ANIM_RAISE_STONE) {
+		stone = j->mano;
+		
+		while (stone != NULL) {
+			stone->frame++;
+			
+			stone = stone->next;
+		}
+		
+		if (j->mano->frame == 5) {
+			j->anim = ANIM_MOVE;
+			j->move_counter = 0;
+		}
+		
+		juego_draw_board (j);
+	} else if (j->anim == ANIM_MOVE) {
+		if (j->move_counter > 2) { // dropFrameWait = 2
+			j->move_counter = 0;
+			
+			if (j->mano != NULL) {
+				j->move_next_cup = juego_check_next_cup (j, j->move_next_cup);
+				j->move_last_cup = j->move_next_cup;
+				/* Desligar la última piedra en la mano */
+				current_stone = j->mano;
+				prev_stone = &j->mano;
+				while (current_stone->next != NULL) {
+					prev_stone = &current_stone->next;
+					current_stone = current_stone->next;
+				}
+				*prev_stone = NULL;
+				current_stone->next = NULL;
+				
+				/* Soltar la piedra en la taza */
+				stone = j->tablero[j->move_next_cup];
+				current_stone->frame = 6;
+				j->mapa[j->move_next_cup]++;
+				if (stone == NULL) {
+					j->tablero[j->move_next_cup] = current_stone;
+				} else {
+					while (stone->next != NULL) {
+						stone = stone->next;
+					}
+					
+					stone->next = current_stone;
+				}
+				
+				if (j->move_next_cup == 6 || j->move_next_cup == 13) {
+					/* Reproducir sonido al 50 % */
+				} else {
+					/* Reproducir sonido al 20 % */
+				}
+				
+				g = j->move_next_cup;
+				
+				/* Re-acomodar la piedra con un nuevo X,Y */
+				loc8 = 6.283185 * rand() / (RAND_MAX + 1.0);
+				if (g == 6 || g == 13) {
+					current_stone->x = ((float) tazas_pos[g][0]) + sin (loc8) * (10.0 * rand() / (RAND_MAX + 1.0));
+					current_stone->y = ((float) tazas_pos[g][1]) + cos (loc8) * (25.0 * rand() / (RAND_MAX + 1.0));
+				} else {
+					current_stone->x = ((float) tazas_pos[g][0]) + sin (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
+					current_stone->y = ((float) tazas_pos[g][1]) + cos (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
+				}
+				
+				j->move_next_cup++;
+			} else {
+				/* Detener animación */
+				j->anim = ANIM_WAIT_DROP;
+			}
+		} else {
+			j->move_counter++;
+		}
+		juego_draw_board (j);
+	} else if (j->anim == ANIM_WAIT_DROP) {
+		/* Esperar a que todas las piedras hayan "caido" */
+		h = FALSE;
+		
+		for (g = 0; g < 14; g++) {
+			stone = j->tablero[g];
+			
+			while (stone != NULL) {
+				if (stone->frame != 0) {
+					h = TRUE;
+					g = 14;
+					break;
+				}
+				stone = stone->next;
+			}
+		}
+		
+		if (h == FALSE) {
+			/* Aquí checar el turno y cambiar */
+			j->anim = ANIM_NONE;
+			return FALSE;
+		}
 	}
 	
 	return TRUE;
@@ -269,9 +462,28 @@ Juego *crear_juego (int top_window) {
 	j->mapa[0] = j->mapa[1] = j->mapa[2] = j->mapa[3] = j->mapa[4] = j->mapa[5] = 4;
 	j->mapa[7] = j->mapa[8] = j->mapa[9] = j->mapa[10] = j->mapa[11] = j->mapa[12] = 4;
 	
-	j->mapa[6] = j->mapa[13] = 10;
+	/*j->mapa[0] = 18;
+	j->mapa[1] = 13;
+	j->mapa[2] = 10;
+	j->mapa[3] = 3;
+	j->mapa[5] = 5;
+	
+	j->mapa[7] = 7;
+	j->mapa[8] = 8;
+	j->mapa[9] = 9;
+	j->mapa[10] = 10;
+	j->mapa[11] = 11;
+	j->mapa[12] = 12;*/
+	
+	j->mapa[6] = j->mapa[13] = 0;
 	j->hint = -1;
 	j->hint_frame = 0;
+	j->anim = ANIM_NONE;
+	
+	j->mano = NULL;
+	
+	j->inicio = 1;
+	j->turno = 1;
 	
 	/* Armar el tablero */
 	color = 0;
@@ -294,6 +506,7 @@ Juego *crear_juego (int top_window) {
 			}
 			
 			stone->color = color;
+			stone->frame = 0;
 			color++;
 			if (color >= 5) {
 				color = 0;
@@ -461,23 +674,25 @@ int juego_mouse_motion (Ventana *v, int x, int y) {
 		}
 	}
 	
-	if (new_hint != -1 && new_hint != j->hint) {
-		/* Activar el timer para dibujar el hint de la taza */
-		j->hint = new_hint;
-		j->hint_frame = 0;
+	if (j->anim == ANIM_NONE) {
+		if (new_hint != -1 && new_hint != j->hint) {
+			/* Activar el timer para dibujar el hint de la taza */
+			j->hint = new_hint;
+			j->hint_frame = 0;
 		
-		window_register_timer_events (v, juego_draw_hint);
-		window_enable_timer (v);
-		
-		//printf ("Activando hint\n");
-		return TRUE;
-	} else if (new_hint == -1) {
-		//printf ("Desactivando hint\n");
-		j->hint = -1;
-		window_disable_timer (v);
-		
-		/* Redibujar el tablero para borrar los hints */
-		juego_draw_board (j);
+			window_register_timer_events (v, juego_draw_hint);
+			window_enable_timer (v);
+			
+			//printf ("Activando hint\n");
+			return TRUE;
+		} else if (new_hint == -1) {
+			//printf ("Desactivando hint\n");
+			j->hint = -1;
+			window_disable_timer (v);
+			
+			/* Redibujar el tablero para borrar los hints */
+			juego_draw_board (j);
+		}
 	}
 	
 	#if 0
@@ -497,74 +712,71 @@ int juego_mouse_motion (Ventana *v, int x, int y) {
 
 int juego_mouse_up (Ventana *v, int x, int y) {
 	int g, h;
-	#if 0
 	Juego *j;
+	int move;
+	MancalaStone *stone, *next;
+	
 	j = (Juego *) window_get_data (v);
 	
-	if (y > 65 && y < 217 && x > 26 && x < 208 && (j->turno % 2) == j->inicio && j->estado == NET_READY && j->num_a == 0) {
-		/* Está dentro del tablero */
-		h = -1;
-		if (x >= 32 && x < 56 && j->tablero[0][0] == 0) {
-			/* Primer fila de resalte */
-			h = 0;
-		} else if (x >= 56 && x < 81 && j->tablero[0][1] == 0) {
-			h = 1;
-		} else if (x >= 81 && x < 105 && j->tablero[0][2] == 0) {
-			h = 2;
-		} else if (x >= 105 && x < 129 && j->tablero[0][3] == 0) {
-			h = 3;
-		} else if (x >= 129 && x < 153 && j->tablero[0][4] == 0) {
-			h = 4;
-		} else if (x >= 153 && x < 178 && j->tablero[0][5] == 0) {
-			h = 5;
-		} else if (x >= 178 && x < 206 && j->tablero[0][6] == 0) {
-			h = 6;
+	move = -1;
+	
+	if (j->turno == 1 && j->inicio == 1 && y >= 100 && y < 130) {
+		if (x >= 69 && x < 97) { // 99
+			move = 12;
+		} else if (x >= 97 && x < 125) { // 127
+			move = 11;
+		} else if (x >= 125 && x < 153) { //155
+			/* Hint de la taza 2 */
+			move = 10;
+		} else if (x >= 153 && x < 183) {
+			move = 9;
+		} else if (x >= 183 && x < 211) {
+			move = 8;
+		} else if (x >= 212 && x < 239) {
+			move = 7;
 		}
-		
-		if (h >= 0) {
-			g = 5;
-			while (g > 0 && j->tablero[g][h] != 0) g--;
-			
-			j->tablero[g][h] = (j->turno % 2) + 1;
-			
-			if (use_sound) Mix_PlayChannel (-1, sounds[SND_DROP], 0);
-			
-			/* Enviar el turno */
-			j->retry = 0;
-			enviar_movimiento (j, j->turno, h, g);
-			j->last_col = h;
-			j->last_fila = g;
-			j->turno++;
-			j->resalte = -1;
-			
-			/* Si es un movimiento ganador, cambiar el estado a WAIT_WINNER */
-			buscar_ganador (j);
-			
-			if (j->win != 0 || j->turno == 42) {
-				j->estado = NET_WAIT_WINNER;
-				/*if (j->win != 0) {
-					// Somos ganadores
-					message_add (MSG_NORMAL, "Has ganado la partida");
-				} else {
-					message_add (MSG_NORMAL, "%s y tú han empatado", j->nick_remoto);
-				}*/
-			}
-			
-			/* Borrar la ficha del tablero y meterla a la cola de animación */
-			j->animaciones[j->num_a].fila = g;
-			j->animaciones[j->num_a].col = h;
-			j->animaciones[j->num_a].frame = 0;
-			j->animaciones[j->num_a].color = j->tablero[g][h];
-			j->num_a++;
-			
-			j->tablero[g][h] = 0;
-			
-			/* TODO: Redibujar aquí el tablero e invocar a window_update */
-			juego_dibujar_tablero (j);
-			window_register_timer_events (j->ventana, juego_timer_callback_anim);
-			window_enable_timer (j->ventana);
+	} else if (j->turno == 0 && j->inicio == 0 && y >= 130 && y < 159) {
+		if (x >= 69 && x < 97) { // 99
+			move = 0;
+		} else if (x >= 97 && x < 125) { // 127
+			move = 1;
+		} else if (x >= 125 && x < 153) { //155
+			/* Hint de la taza 2 */
+			move = 2;
+		} else if (x >= 153 && x < 183) {
+			move = 3;
+		} else if (x >= 183 && x < 211) {
+			move = 4;
+		} else if (x >= 212 && x < 239) {
+			move = 5;
 		}
 	}
+	
+	if (j->anim == ANIM_NONE && move != -1 && j->mapa[move] > 0) {
+		j->anim = ANIM_RAISE_STONE;
+		
+		stone = j->tablero[move];
+		j->mano = NULL;
+		j->move_next_cup = move + 1;
+		while (stone != NULL) {
+			next = stone->next;
+			
+			stone->next = j->mano;
+			j->mano = stone;
+			
+			stone->frame = 1;
+			stone = next;
+		}
+		
+		j->mapa[move] = 0;
+		j->tablero[move] = NULL;
+		
+		/* Activar el timer para levantar las piedras */
+		window_register_timer_events (v, juego_move_stones);
+		window_enable_timer (v);
+	}
+	
+	#if 0
 	/* Revisar si el evento cae dentro del botón de cierre */
 	if (y >= 26 && y < 54 && x >= 192 && x < 220) {
 		/* El click cae en el botón de cierre de la ventana */

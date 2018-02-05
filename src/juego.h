@@ -41,6 +41,7 @@ typedef struct _MancalaStone {
 	
 	float x, y;
 	
+	int frame;
 	struct _MancalaStone *next;
 } MancalaStone;
 
@@ -52,6 +53,17 @@ typedef struct _Juego {
 	int mapa[14];
 	
 	MancalaStone *tablero[14];
+	
+	/* Quién inicia el juego y quién está jugando */
+	int inicio;
+	int turno;
+	
+	int anim;
+	int move_counter;
+	int move_next_cup;
+	int move_last_cup;
+	
+	MancalaStone *mano;
 	
 	int hint;
 	int hint_frame;
