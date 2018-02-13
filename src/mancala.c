@@ -59,6 +59,7 @@
 //#include "utf8.h"
 #include "draw-text.h"
 #include "resolv.h"
+#include "zoom.h"
 
 #define FPS (1000/24)
 
@@ -73,6 +74,8 @@ const char *images_names[NUM_IMAGES] = {
 	"images/player_1_highlight.png",
 	"images/player_2_background.png",
 	"images/player_2_highlight.png",
+	
+	"images/grey_screen.png",
 	
 	"images/stone1_0.png",
 	"images/stone1_1.png",
@@ -141,6 +144,9 @@ SDL_Surface * images [NUM_IMAGES];
 SDL_Surface * text_waiting;
 SDL_Surface * nick_image = NULL;
 SDL_Surface * nick_image_blue = NULL;
+SDL_Surface * free_turn_text[4] = {NULL, NULL, NULL, NULL};
+SDL_Surface * go_again_text[4] = {NULL, NULL, NULL, NULL};
+SDL_Surface * capture_text[4] = {NULL, NULL, NULL, NULL};
 
 int use_sound;
 Mix_Chunk * sounds[NUM_SOUNDS];
@@ -408,6 +414,8 @@ void setup (void) {
 	SDL_Color blanco, negro;
 	int g;
 	char buffer_file[8192];
+	float sw, sh;
+	int resw, resh;
 	
 	/* Inicializar el Video SDL */
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -535,10 +543,11 @@ void setup (void) {
 		SDL_Quit ();
 		exit (1);
 	}
+	#endif
 	
 	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
-	ttf20_comiccrazy = TTF_OpenFont (buffer_file, 20);
-	if (!ttf20_comiccrazy) {
+	font = TTF_OpenFont (buffer_file, 34);
+	if (!font) {
 		fprintf (stderr,
 			"Failed to load font file 'Comic Crazy'\n"
 			"The error returned by SDL is:\n"
@@ -547,11 +556,86 @@ void setup (void) {
 		exit (1);
 	}
 	
-	/* Dibujar el texto de "Esperando jugador" */
-	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xff;
-	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
-	text_waiting = draw_text_with_shadow (ttf16_comiccrazy, 2, "Connecting...", blanco, negro);
-	#endif
+	/* Dibujar el texto de "Free Turn" */
+	// #FBC827
+	blanco.r = 0xFB; blanco.g = 0xC8; blanco.b = 0x27;
+	negro.r = 0x00; negro.g = 0x00; negro.b = 0x00;
+	free_turn_text[3] = draw_text_with_shadow (font, 4, "FREE TURN", blanco, negro);
+	capture_text[3] = draw_text_with_shadow (font, 4, "CAPTURE", blanco, negro);
+	
+	TTF_CloseFont (font);
+	
+	/* Generar los 3 textos escalados */
+	sw = 0.5 * ((float) free_turn_text[3]->w);
+	sh = 0.5 * ((float) free_turn_text[3]->h);
+	
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
+	
+	free_turn_text[0] = rotozoomSurfaceXY (free_turn_text[3], resw, resh, 1);
+	
+	sw = 1.1 * ((float) free_turn_text[3]->w);
+	sh = 1.2 * ((float) free_turn_text[3]->h);
+	
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
+	
+	free_turn_text[1] = rotozoomSurfaceXY (free_turn_text[3], resw, free_turn_text[3]->h, 1);
+	free_turn_text[2] = rotozoomSurfaceXY (free_turn_text[3], free_turn_text[3]->w, resh, 1);
+	
+	/* Generar los 3 textos escalados */
+	sw = 0.5 * ((float) capture_text[3]->w);
+	sh = 0.5 * ((float) capture_text[3]->h);
+	
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
+	
+	capture_text[0] = rotozoomSurfaceXY (capture_text[3], resw, resh, 1);
+	
+	sw = 1.1 * ((float) capture_text[3]->w);
+	sh = 1.2 * ((float) capture_text[3]->h);
+	
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
+	
+	capture_text[1] = rotozoomSurfaceXY (capture_text[3], resw, capture_text[3]->h, 1);
+	capture_text[2] = rotozoomSurfaceXY (capture_text[3], capture_text[3]->w, resh, 1);
+	
+	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
+	font = TTF_OpenFont (buffer_file, 24);
+	if (!font) {
+		fprintf (stderr,
+			"Failed to load font file 'Comic Crazy'\n"
+			"The error returned by SDL is:\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
+	}
+	
+	/* Dibujar el texto de "Go Again!" */
+	blanco.r = 0xFF; blanco.g = 0xFF; blanco.b = 0xFF;
+	negro.r = 0x00; negro.g = 0x00; negro.b = 0x00;
+	go_again_text[3] = draw_text_with_shadow (font, 4, "GO AGAIN!", blanco, negro);
+	
+	TTF_CloseFont (font);
+	
+	/* Generar los 3 textos escalados */
+	sw = 0.5 * ((float) go_again_text[3]->w);
+	sh = 0.5 * ((float) go_again_text[3]->h);
+	
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
+	
+	go_again_text[0] = rotozoomSurfaceXY (go_again_text[3], resw, resh, 1);
+	/* Generar los 3 textos escalados */
+	sw = 1.1 * ((float) go_again_text[3]->w);
+	sh = 1.2 * ((float) go_again_text[3]->h);
+	
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
+	
+	go_again_text[1] = rotozoomSurfaceXY (go_again_text[3], resw, go_again_text[3]->h, 1);
+	go_again_text[2] = rotozoomSurfaceXY (go_again_text[3], go_again_text[3]->w, resh, 1);
 	
 	setup_background ();
 	srand (SDL_GetTicks ());

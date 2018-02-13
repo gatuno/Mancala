@@ -55,7 +55,10 @@ enum {
 	ANIM_NONE = 0,
 	ANIM_RAISE_STONE,
 	ANIM_MOVE,
-	ANIM_WAIT_DROP
+	ANIM_WAIT_DROP,
+	ANIM_CAPTURE,
+	ANIM_FREE_TURN,
+	ANIM_CAPTURE_TURN
 };
 
 int juego_mouse_down (Ventana *v, int x, int y);
@@ -191,16 +194,8 @@ void juego_draw_board (Juego *j) {
 			rect.x = 14.0 + stone->x + stones_offsets[stone->color][0];
 			rect.y = 30.5 + stone->y + stones_offsets[stone->color][1];
 			i = 0;
-			if (stone->frame == 1) {
-				i = 0;
-			} else if (stone->frame == 2) {
-				i = 1;
-			} else if (stone->frame == 3) {
-				i = 2;
-			} else if (stone->frame == 4) {
-				i = 3;
-			} else if (stone->frame == 5) {
-				i = 4;
+			if (stone->frame > 0 && stone->frame <= 5) {
+				i = stone->frame - 1;
 			} else if (stone->frame == 6) {
 				i = 4;
 				stone->frame++;
@@ -331,15 +326,342 @@ static int juego_draw_hint (Ventana *v) {
 	return TRUE;
 }
 
-static int juego_move_stones (Ventana *v) {
-	Juego *j;
-	SDL_Surface *surface;
-	MancalaStone *stone, *current_stone, **prev_stone;
+static void juego_drop_stone (Juego *j, MancalaStone *current_stone, int cup) {
+	MancalaStone *stone;
 	float loc8;
-	int g, h;
+	
+	current_stone->frame = 6;
+	current_stone->next = NULL;
+	
+	j->mapa[cup]++;
+	if (j->tablero[cup] == NULL) {
+		j->tablero[cup] = current_stone;
+	} else {
+		stone = j->tablero[cup];
+		while (stone->next != NULL) {
+			stone = stone->next;
+		}
+		
+		stone->next = current_stone;
+	}
+	
+	if (cup == 6 || cup == 13) {
+		/* Reproducir sonido al 50 % */
+	} else {
+		/* Reproducir sonido al 20 % */
+	}
+	
+	/* Re-acomodar la piedra con un nuevo X,Y */
+	loc8 = 6.283185 * rand() / (RAND_MAX + 1.0);
+	if (cup == 6 || cup == 13) {
+		current_stone->x = ((float) tazas_pos[cup][0]) + sin (loc8) * (10.0 * rand() / (RAND_MAX + 1.0));
+		current_stone->y = ((float) tazas_pos[cup][1]) + cos (loc8) * (25.0 * rand() / (RAND_MAX + 1.0));
+	} else {
+		current_stone->x = ((float) tazas_pos[cup][0]) + sin (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
+		current_stone->y = ((float) tazas_pos[cup][1]) + cos (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
+	}
+}
+
+static void juego_draw_message (Ventana *v) {
+	SDL_Surface *surface;
+	SDL_Rect rect;
+	Juego *j;
 	
 	j = (Juego *) window_get_data (v);
 	surface = window_get_surface (v);
+	if ((j->move_counter >= 0 && j->move_counter < 5) ||
+	    j->move_counter >= 55) {
+		juego_draw_board (j);
+		rect.x = 14;
+		rect.y = 30;
+		rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+		rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+		SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+	} else if (j->anim == ANIM_FREE_TURN) {
+		if (j->move_counter == 5 || j->move_counter == 52) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+		
+			rect.x = 152 - (free_turn_text[0]->w / 2);
+			rect.y = 115 - (free_turn_text[0]->h / 2);
+			rect.w = free_turn_text[0]->w;
+			rect.h = free_turn_text[0]->h;
+		
+			SDL_BlitSurface (free_turn_text[0], NULL, surface, &rect);
+			if (j->move_counter == 52) {
+				rect.x = 152 - (go_again_text[2]->w / 2);
+				rect.y = 148 - (go_again_text[2]->h / 2);
+				rect.w = go_again_text[2]->w;
+				rect.h = go_again_text[2]->h;
+			
+				SDL_BlitSurface (go_again_text[2], NULL, surface, &rect);
+			}
+		} else if (j->move_counter == 6 || j->move_counter == 51) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+		
+			rect.x = 152 - (free_turn_text[1]->w / 2);
+			rect.y = 115 - (free_turn_text[1]->h / 2);
+			rect.w = free_turn_text[1]->w;
+			rect.h = free_turn_text[1]->h;
+		
+			SDL_BlitSurface (free_turn_text[1], NULL, surface, &rect);
+			if (j->move_counter == 51) {
+				rect.x = 152 - (go_again_text[3]->w / 2);
+				rect.y = 148 - (go_again_text[3]->h / 2);
+				rect.w = go_again_text[3]->w;
+				rect.h = go_again_text[3]->h;
+			
+				SDL_BlitSurface (go_again_text[3], NULL, surface, &rect);
+			}
+		} else if (j->move_counter == 7 || j->move_counter == 50) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+		
+			rect.x = 152 - (free_turn_text[2]->w / 2);
+			rect.y = 115 - (free_turn_text[2]->h / 2);
+			rect.w = free_turn_text[2]->w;
+			rect.h = free_turn_text[2]->h;
+		
+			SDL_BlitSurface (free_turn_text[2], NULL, surface, &rect);
+			if (j->move_counter == 50) {
+				rect.x = 152 - (go_again_text[3]->w / 2);
+				rect.y = 148 - (go_again_text[3]->h / 2);
+				rect.w = go_again_text[3]->w;
+				rect.h = go_again_text[3]->h;
+			
+				SDL_BlitSurface (go_again_text[3], NULL, surface, &rect);
+			}
+		} else if (j->move_counter >= 8 && j->move_counter < 20) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+		
+			rect.x = 152 - (free_turn_text[3]->w / 2);
+			rect.y = 115 - (free_turn_text[3]->h / 2);
+			rect.w = free_turn_text[3]->w;
+			rect.h = free_turn_text[3]->h;
+		
+			SDL_BlitSurface (free_turn_text[3], NULL, surface, &rect);
+		} else if (j->move_counter == 20) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+		
+			rect.x = 152 - (free_turn_text[3]->w / 2);
+			rect.y = 115 - (free_turn_text[3]->h / 2);
+			rect.w = free_turn_text[3]->w;
+			rect.h = free_turn_text[3]->h;
+		
+			SDL_BlitSurface (free_turn_text[3], NULL, surface, &rect);
+		
+			rect.x = 152 - (go_again_text[0]->w / 2);
+			rect.y = 148 - (go_again_text[0]->h / 2);
+			rect.w = go_again_text[0]->w;
+			rect.h = go_again_text[0]->h;
+		
+			SDL_BlitSurface (go_again_text[0], NULL, surface, &rect);
+		} else if (j->move_counter == 21) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+			
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+			
+			rect.x = 152 - (free_turn_text[3]->w / 2);
+			rect.y = 115 - (free_turn_text[3]->h / 2);
+			rect.w = free_turn_text[3]->w;
+			rect.h = free_turn_text[3]->h;
+			
+			SDL_BlitSurface (free_turn_text[3], NULL, surface, &rect);
+			
+			rect.x = 152 - (go_again_text[1]->w / 2);
+			rect.y = 148 - (go_again_text[1]->h / 2);
+			rect.w = go_again_text[1]->w;
+			rect.h = go_again_text[1]->h;
+			
+			SDL_BlitSurface (go_again_text[1], NULL, surface, &rect);
+		} else if (j->move_counter == 22) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+			
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+			
+			rect.x = 152 - (free_turn_text[3]->w / 2);
+			rect.y = 115 - (free_turn_text[3]->h / 2);
+			rect.w = free_turn_text[3]->w;
+			rect.h = free_turn_text[3]->h;
+			
+			SDL_BlitSurface (free_turn_text[3], NULL, surface, &rect);
+			
+			rect.x = 152 - (go_again_text[2]->w / 2);
+			rect.y = 148 - (go_again_text[2]->h / 2);
+			rect.w = go_again_text[2]->w;
+			rect.h = go_again_text[2]->h;
+			
+			SDL_BlitSurface (go_again_text[2], NULL, surface, &rect);
+		} else if (j->move_counter >= 23 && j->move_counter < 50) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+			
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+			
+			rect.x = 152 - (free_turn_text[3]->w / 2);
+			rect.y = 115 - (free_turn_text[3]->h / 2);
+			rect.w = free_turn_text[3]->w;
+			rect.h = free_turn_text[3]->h;
+			
+			SDL_BlitSurface (free_turn_text[3], NULL, surface, &rect);
+			
+			rect.x = 152 - (go_again_text[3]->w / 2);
+			rect.y = 148 - (go_again_text[3]->h / 2);
+			rect.w = go_again_text[3]->w;
+			rect.h = go_again_text[3]->h;
+			
+			SDL_BlitSurface (go_again_text[3], NULL, surface, &rect);
+		} else if (j->move_counter == 53) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+			
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+			
+			rect.x = 152 - (go_again_text[1]->w / 2);
+			rect.y = 148 - (go_again_text[1]->h / 2);
+			rect.w = go_again_text[1]->w;
+			rect.h = go_again_text[1]->h;
+			
+			SDL_BlitSurface (go_again_text[1], NULL, surface, &rect);
+		} else if (j->move_counter == 54) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+			
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+			
+			rect.x = 152 - (go_again_text[0]->w / 2);
+			rect.y = 148 - (go_again_text[0]->h / 2);
+			rect.w = go_again_text[0]->w;
+			rect.h = go_again_text[0]->h;
+			
+			SDL_BlitSurface (go_again_text[0], NULL, surface, &rect);
+		}
+	} else if (j->anim == ANIM_CAPTURE_TURN) {
+		if (j->move_counter == 5 || j->move_counter == 52) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+			
+			rect.x = 152 - (capture_text[0]->w / 2);
+			rect.y = 132 - (capture_text[0]->h / 2);
+			rect.w = capture_text[0]->w;
+			rect.h = capture_text[0]->h;
+		
+			SDL_BlitSurface (capture_text[0], NULL, surface, &rect);
+		} else if (j->move_counter == 6 || j->move_counter == 51) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+		
+			rect.x = 152 - (capture_text[1]->w / 2);
+			rect.y = 132 - (capture_text[1]->h / 2);
+			rect.w = capture_text[1]->w;
+			rect.h = capture_text[1]->h;
+		
+			SDL_BlitSurface (capture_text[1], NULL, surface, &rect);
+		} else if (j->move_counter == 7 || j->move_counter == 50) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+		
+			rect.x = 152 - (capture_text[2]->w / 2);
+			rect.y = 132 - (capture_text[2]->h / 2);
+			rect.w = capture_text[2]->w;
+			rect.h = capture_text[2]->h;
+		
+			SDL_BlitSurface (capture_text[2], NULL, surface, &rect);
+		} else if (j->move_counter >= 8 && j->move_counter < 50) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+		
+			rect.x = 152 - (capture_text[2]->w / 2);
+			rect.y = 132 - (capture_text[2]->h / 2);
+			rect.w = capture_text[2]->w;
+			rect.h = capture_text[2]->h;
+		
+			SDL_BlitSurface (capture_text[2], NULL, surface, &rect);
+		} else if (j->move_counter > 52) {
+			juego_draw_board (j);
+			rect.x = 14;
+			rect.y = 30;
+			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+		
+			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+		}
+	}
+}
+
+static int juego_move_stones (Ventana *v) {
+	Juego *j;
+	MancalaStone *stone, *current_stone, **prev_stone;
+	int g, h;
+	
+	j = (Juego *) window_get_data (v);
+	
 	if (j->anim == ANIM_RAISE_STONE) {
 		stone = j->mano;
 		
@@ -370,39 +692,9 @@ static int juego_move_stones (Ventana *v) {
 					current_stone = current_stone->next;
 				}
 				*prev_stone = NULL;
-				current_stone->next = NULL;
 				
 				/* Soltar la piedra en la taza */
-				stone = j->tablero[j->move_next_cup];
-				current_stone->frame = 6;
-				j->mapa[j->move_next_cup]++;
-				if (stone == NULL) {
-					j->tablero[j->move_next_cup] = current_stone;
-				} else {
-					while (stone->next != NULL) {
-						stone = stone->next;
-					}
-					
-					stone->next = current_stone;
-				}
-				
-				if (j->move_next_cup == 6 || j->move_next_cup == 13) {
-					/* Reproducir sonido al 50 % */
-				} else {
-					/* Reproducir sonido al 20 % */
-				}
-				
-				g = j->move_next_cup;
-				
-				/* Re-acomodar la piedra con un nuevo X,Y */
-				loc8 = 6.283185 * rand() / (RAND_MAX + 1.0);
-				if (g == 6 || g == 13) {
-					current_stone->x = ((float) tazas_pos[g][0]) + sin (loc8) * (10.0 * rand() / (RAND_MAX + 1.0));
-					current_stone->y = ((float) tazas_pos[g][1]) + cos (loc8) * (25.0 * rand() / (RAND_MAX + 1.0));
-				} else {
-					current_stone->x = ((float) tazas_pos[g][0]) + sin (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
-					current_stone->y = ((float) tazas_pos[g][1]) + cos (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
-				}
+				juego_drop_stone (j, current_stone, j->move_next_cup);
 				
 				j->move_next_cup++;
 			} else {
@@ -432,9 +724,89 @@ static int juego_move_stones (Ventana *v) {
 		
 		if (h == FALSE) {
 			/* Aquí checar el turno y cambiar */
+			/* Si la última piedra ya cayó, revisar si hay captura o juega de nuevo */
+			if (j->move_last_cup == 6 && j->inicio == 0) {
+				j->anim = ANIM_FREE_TURN;
+				j->move_counter = 0;
+			} else if (j->move_last_cup == 13 && j->inicio == 1) {
+				j->anim = ANIM_FREE_TURN;
+				j->move_counter = 0;
+			} else if (j->mapa[j->move_last_cup] == 1 && j->inicio == 0 && j->move_last_cup < 6) {
+				/* Captura */
+				j->anim = ANIM_CAPTURE;
+				j->move_counter = 0;
+				
+				g = 12 - j->move_last_cup;
+			} else if (j->mapa[j->move_last_cup] == 1 && j->inicio == 1 && j->move_last_cup > 6 && j->move_last_cup < 13) {
+				/* Captura */
+				j->anim = ANIM_CAPTURE;
+				j->move_counter = 0;
+				
+				g = 12 - j->move_last_cup;
+			} else {
+				/* Cambiar el turno */
+				j->turno++;
+				if (j->turno > 1) j->turno = 0;
+				j->anim = ANIM_NONE;
+				return FALSE;
+			}
+		}
+	} else if (j->anim == ANIM_FREE_TURN || j->anim == ANIM_CAPTURE_TURN) {
+		juego_draw_message (v);
+		j->move_counter++;
+		
+		if (j->move_counter > 60) {
+			if (j->anim == ANIM_CAPTURE_TURN) {
+				/* Cambiar el turno */
+				j->turno++;
+				if (j->turno > 1) j->turno = 0;
+			}
+			juego_draw_board (j);
 			j->anim = ANIM_NONE;
 			return FALSE;
 		}
+	} else if (j->anim == ANIM_CAPTURE) {
+		h = 12 - j->move_last_cup;
+		
+		if (j->move_counter > 2) { // dropFrameWait = 2
+			j->move_counter = 0;
+			
+			if (j->tablero[h] != NULL) {
+				current_stone = j->tablero[h];
+				
+				j->tablero[h] = current_stone->next;
+				j->mapa[h]--;
+				
+				/* Ahora, poner esta piedra en el espacio de la mancala */
+				if (j->move_last_cup < 6) {
+					g = 6;
+				} else {
+					g = 13;
+				}
+				juego_drop_stone (j, current_stone, g);
+			} else {
+				/* Cuando la última piedra del oponente es enviada al mancala, mandar la piedra que causó la captura */
+				current_stone = j->tablero[j->move_last_cup];
+				j->tablero[j->move_last_cup] = NULL;
+				j->mapa[j->move_last_cup] = 0;
+				
+				/* Ahora, poner esta piedra en el espacio de la mancala */
+				if (j->move_last_cup < 6) {
+					g = 6;
+				} else {
+					g = 13;
+				}
+				juego_drop_stone (j, current_stone, g);
+				
+				j->anim = ANIM_CAPTURE_TURN;
+				j->move_counter = 0;
+				return TRUE;
+			}
+		} else {
+			j->move_counter++;
+		}
+		
+		juego_draw_board (j);
 	}
 	
 	return TRUE;
@@ -482,8 +854,8 @@ Juego *crear_juego (int top_window) {
 	
 	j->mano = NULL;
 	
-	j->inicio = 1;
-	j->turno = 1;
+	j->inicio = 0;
+	j->turno = 0;
 	
 	/* Armar el tablero */
 	color = 0;

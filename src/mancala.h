@@ -18,8 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __FINDFOUR_H__
-#define __FINDFOUR_H__
+#ifndef __MANCALA_H__
+#define __MANCALA_H__
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -48,6 +48,8 @@ enum {
 	
 	IMG_PLAYER_2_NORMAL,
 	IMG_PLAYER_2_HIGHLIGHT,
+	
+	IMG_PLAYER_GREY_SCREEN,
 	
 	IMG_STONE_1_0,
 	IMG_STONE_1_1,
@@ -109,7 +111,10 @@ enum {
 extern SDL_Surface * images [NUM_IMAGES];
 extern char nick_global[NICK_SIZE];
 extern SDL_Surface *nick_image, *nick_image_blue;
-extern SDL_Surface * text_waiting;
+extern SDL_Surface *text_waiting;
+extern SDL_Surface *free_turn_text[4];
+extern SDL_Surface *go_again_text[4];
+extern SDL_Surface *capture_text[4];
 
 extern int use_sound;
 extern Mix_Chunk * sounds[NUM_SOUNDS];
@@ -117,5 +122,5 @@ extern Mix_Chunk * sounds[NUM_SOUNDS];
 extern TTF_Font *ttf16_burbank_small;
 void nueva_conexion (void *ib, const char *texto);
 
-#endif /* __FINDFOUR_H__ */
+#endif /* __MANCALA_H__ */
 

@@ -9,7 +9,8 @@ mancala_SOURCES = mancala.c mancala.h \
 	draw-text.c draw-text.h \
 	path.c path.h \
 	background.c background.h \
-	ventana.c ventana.h
+	ventana.c ventana.h \
+	zoom.c zoom.h
 
 if MACOSX
 mancala_SOURCES += SDLMain.m SDLMain.h
