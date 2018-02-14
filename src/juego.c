@@ -369,25 +369,23 @@ static void juego_draw_message (Ventana *v) {
 	
 	j = (Juego *) window_get_data (v);
 	surface = window_get_surface (v);
+	
+	juego_draw_board (j);
+	
+	rect.x = 14;
+	rect.y = 30;
+	rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
+	rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
+	
+	SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
+	
 	if ((j->move_counter >= 0 && j->move_counter < 5) ||
 	    j->move_counter >= 55) {
-		juego_draw_board (j);
-		rect.x = 14;
-		rect.y = 30;
-		rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-		rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-		SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-	} else if (j->anim == ANIM_FREE_TURN) {
+		return;
+	}
+	
+	if (j->anim == ANIM_FREE_TURN) {
 		if (j->move_counter == 5 || j->move_counter == 52) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-		
 			rect.x = 152 - (free_turn_text[0]->w / 2);
 			rect.y = 115 - (free_turn_text[0]->h / 2);
 			rect.w = free_turn_text[0]->w;
@@ -403,14 +401,6 @@ static void juego_draw_message (Ventana *v) {
 				SDL_BlitSurface (go_again_text[2], NULL, surface, &rect);
 			}
 		} else if (j->move_counter == 6 || j->move_counter == 51) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-		
 			rect.x = 152 - (free_turn_text[1]->w / 2);
 			rect.y = 115 - (free_turn_text[1]->h / 2);
 			rect.w = free_turn_text[1]->w;
@@ -426,14 +416,6 @@ static void juego_draw_message (Ventana *v) {
 				SDL_BlitSurface (go_again_text[3], NULL, surface, &rect);
 			}
 		} else if (j->move_counter == 7 || j->move_counter == 50) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-		
 			rect.x = 152 - (free_turn_text[2]->w / 2);
 			rect.y = 115 - (free_turn_text[2]->h / 2);
 			rect.w = free_turn_text[2]->w;
@@ -449,14 +431,6 @@ static void juego_draw_message (Ventana *v) {
 				SDL_BlitSurface (go_again_text[3], NULL, surface, &rect);
 			}
 		} else if (j->move_counter >= 8 && j->move_counter < 20) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-		
 			rect.x = 152 - (free_turn_text[3]->w / 2);
 			rect.y = 115 - (free_turn_text[3]->h / 2);
 			rect.w = free_turn_text[3]->w;
@@ -464,14 +438,6 @@ static void juego_draw_message (Ventana *v) {
 		
 			SDL_BlitSurface (free_turn_text[3], NULL, surface, &rect);
 		} else if (j->move_counter == 20) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-		
 			rect.x = 152 - (free_turn_text[3]->w / 2);
 			rect.y = 115 - (free_turn_text[3]->h / 2);
 			rect.w = free_turn_text[3]->w;
@@ -486,14 +452,6 @@ static void juego_draw_message (Ventana *v) {
 		
 			SDL_BlitSurface (go_again_text[0], NULL, surface, &rect);
 		} else if (j->move_counter == 21) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-			
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-			
 			rect.x = 152 - (free_turn_text[3]->w / 2);
 			rect.y = 115 - (free_turn_text[3]->h / 2);
 			rect.w = free_turn_text[3]->w;
@@ -508,14 +466,6 @@ static void juego_draw_message (Ventana *v) {
 			
 			SDL_BlitSurface (go_again_text[1], NULL, surface, &rect);
 		} else if (j->move_counter == 22) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-			
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-			
 			rect.x = 152 - (free_turn_text[3]->w / 2);
 			rect.y = 115 - (free_turn_text[3]->h / 2);
 			rect.w = free_turn_text[3]->w;
@@ -530,14 +480,6 @@ static void juego_draw_message (Ventana *v) {
 			
 			SDL_BlitSurface (go_again_text[2], NULL, surface, &rect);
 		} else if (j->move_counter >= 23 && j->move_counter < 50) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-			
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-			
 			rect.x = 152 - (free_turn_text[3]->w / 2);
 			rect.y = 115 - (free_turn_text[3]->h / 2);
 			rect.w = free_turn_text[3]->w;
@@ -552,14 +494,6 @@ static void juego_draw_message (Ventana *v) {
 			
 			SDL_BlitSurface (go_again_text[3], NULL, surface, &rect);
 		} else if (j->move_counter == 53) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-			
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-			
 			rect.x = 152 - (go_again_text[1]->w / 2);
 			rect.y = 148 - (go_again_text[1]->h / 2);
 			rect.w = go_again_text[1]->w;
@@ -567,14 +501,6 @@ static void juego_draw_message (Ventana *v) {
 			
 			SDL_BlitSurface (go_again_text[1], NULL, surface, &rect);
 		} else if (j->move_counter == 54) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-			
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-			
 			rect.x = 152 - (go_again_text[0]->w / 2);
 			rect.y = 148 - (go_again_text[0]->h / 2);
 			rect.w = go_again_text[0]->w;
@@ -584,73 +510,33 @@ static void juego_draw_message (Ventana *v) {
 		}
 	} else if (j->anim == ANIM_CAPTURE_TURN) {
 		if (j->move_counter == 5 || j->move_counter == 52) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-			
 			rect.x = 152 - (capture_text[0]->w / 2);
-			rect.y = 132 - (capture_text[0]->h / 2);
+			rect.y = 130 - (capture_text[0]->h / 2);
 			rect.w = capture_text[0]->w;
 			rect.h = capture_text[0]->h;
 		
 			SDL_BlitSurface (capture_text[0], NULL, surface, &rect);
 		} else if (j->move_counter == 6 || j->move_counter == 51) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-		
 			rect.x = 152 - (capture_text[1]->w / 2);
-			rect.y = 132 - (capture_text[1]->h / 2);
+			rect.y = 130 - (capture_text[1]->h / 2);
 			rect.w = capture_text[1]->w;
 			rect.h = capture_text[1]->h;
 		
 			SDL_BlitSurface (capture_text[1], NULL, surface, &rect);
 		} else if (j->move_counter == 7 || j->move_counter == 50) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-		
 			rect.x = 152 - (capture_text[2]->w / 2);
-			rect.y = 132 - (capture_text[2]->h / 2);
+			rect.y = 130 - (capture_text[2]->h / 2);
 			rect.w = capture_text[2]->w;
 			rect.h = capture_text[2]->h;
 		
 			SDL_BlitSurface (capture_text[2], NULL, surface, &rect);
 		} else if (j->move_counter >= 8 && j->move_counter < 50) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
-		
 			rect.x = 152 - (capture_text[2]->w / 2);
-			rect.y = 132 - (capture_text[2]->h / 2);
+			rect.y = 130 - (capture_text[2]->h / 2);
 			rect.w = capture_text[2]->w;
 			rect.h = capture_text[2]->h;
 		
 			SDL_BlitSurface (capture_text[2], NULL, surface, &rect);
-		} else if (j->move_counter > 52) {
-			juego_draw_board (j);
-			rect.x = 14;
-			rect.y = 30;
-			rect.w = images[IMG_PLAYER_GREY_SCREEN]->w;
-			rect.h = images[IMG_PLAYER_GREY_SCREEN]->h;
-		
-			SDL_BlitSurface (images[IMG_PLAYER_GREY_SCREEN], NULL, surface, &rect);
 		}
 	}
 }
