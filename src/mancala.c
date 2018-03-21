@@ -53,9 +53,9 @@
 #include "mancala.h"
 #include "background.h"
 #include "juego.h"
-//#include "netplay.h"
+#include "netplay.h"
 //#include "chat.h"
-//#include "inputbox.h"
+#include "inputbox.h"
 //#include "utf8.h"
 #include "draw-text.h"
 #include "resolv.h"
@@ -75,6 +75,7 @@ const char *images_names[NUM_IMAGES] = {
 	"images/player_2_background.png",
 	"images/player_2_highlight.png",
 	
+	"images/waiting.png",
 	"images/grey_screen.png",
 	
 	"images/stone1_0.png",
@@ -118,7 +119,21 @@ const char *images_names[NUM_IMAGES] = {
 	"images/stone5_6.png",
 	"images/stone5_7.png",
 	
-	"images/flecha.png"
+	"images/flecha.png",
+	
+	/* Imágenes que se usan con el inputbox */
+	"images/window.png",
+	"images/tab.png",
+	"images/inputbox.png",
+	"images/chat.png",
+	
+	"images/button-up.png",
+	"images/button-over.png",
+	"images/button-down.png",
+	
+	"images/button-list-up.png",
+	"images/button-list-over.png",
+	"images/button-list-down.png"
 };
 
 const char *sound_names[NUM_SOUNDS] = {
@@ -151,13 +166,14 @@ SDL_Surface * capture_text[4] = {NULL, NULL, NULL, NULL};
 int use_sound;
 Mix_Chunk * sounds[NUM_SOUNDS];
 
-//static InputBox *connect_window;
+static InputBox *connect_window;
 
 int server_port;
 char nick_global[NICK_SIZE];
 static int nick_default;
 
 TTF_Font *ttf16_burbank_small;
+TTF_Font *ttf16_comiccrazy;
 
 void render_nick (void) {
 	SDL_Color blanco, negro;
@@ -167,11 +183,11 @@ void render_nick (void) {
 	
 	negro.r = negro.g = negro.b = 0;
 	blanco.r = blanco.g = blanco.b = 255;
-	//nick_image = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
+	nick_image = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
 	
 	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xff;
 	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
-	//nick_image_blue = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
+	nick_image_blue = draw_text_with_shadow (ttf16_comiccrazy, 2, nick_global, blanco, negro);
 }
 
 #if 0
@@ -208,10 +224,11 @@ void change_nick (InputBox *ib, const char *texto) {
 	/* Eliminar esta ventana de texto */
 	eliminar_inputbox (ib);
 }
+#endif
 
 void late_connect (const char *hostname, int port, const struct addrinfo *res, int error, const char *errstr) {
 	if (res == NULL) {
-		message_add (MSG_ERROR, "OK", "Error al resolver nombre '%s':\n%s", hostname, errstr);
+		//message_add (MSG_ERROR, "OK", "Error al resolver nombre '%s':\n%s", hostname, errstr);
 		return;
 	}
 	
@@ -246,7 +263,7 @@ void nueva_conexion (void *d, const char *texto) {
 		/* Ejecutar la resolución de nombres primero, conectar después */
 		do_query (hostname, puerto, late_connect);
 		
-		buddy_list_recent_add (texto);
+		//buddy_list_recent_add (texto);
 	} else {
 		/* Mandar un mensaje de error */
 	}
@@ -264,7 +281,7 @@ void cancelar_conexion (InputBox *ib, const char *texto) {
 	connect_window = NULL;
 }
 
-void findfour_default_keyboard_handler (SDL_KeyboardEvent *key) {
+int mancala_default_keyboard_handler (Ventana *v, SDL_KeyboardEvent *key) {
 	if (key->keysym.sym == SDLK_F5) {
 		if (connect_window != NULL) {
 			/* Levantar la ventana de conexión al frente */
@@ -274,10 +291,9 @@ void findfour_default_keyboard_handler (SDL_KeyboardEvent *key) {
 			connect_window = crear_inputbox ((InputBoxFunc) nueva_conexion, "Dirección a conectar:", "", cancelar_conexion);
 		}
 	} else if (key->keysym.sym == SDLK_F8) {
-		show_chat ();
+		//show_chat ();
 	}
 }
-#endif
 
 int main (int argc, char *argv[]) {
 	int r;
@@ -297,7 +313,7 @@ int main (int argc, char *argv[]) {
 	
 	nick_default = 1;
 	
-	server_port = 3300;
+	server_port = 3301;
 	
 	do {
 		if (game_loop () == GAME_QUIT) break;
@@ -323,14 +339,13 @@ int game_loop (void) {
 	Juego *j;
 	
 	//SDL_EventState (SDL_MOUSEMOTION, SDL_IGNORE);
-	#if 0
 	if (findfour_netinit (server_port) < 0) {
 		fprintf (stderr, "Falló al inicializar la red\n");
 		
 		return GAME_QUIT;
 	}
-	#endif
 	
+	window_register_default_keyboard_events (mancala_default_keyboard_handler, NULL);
 	draw_background (screen, NULL);
 	//inicializar_chat ();
 	
@@ -342,7 +357,7 @@ int game_loop (void) {
 	
 	SDL_EnableUNICODE (1);
 	
-	crear_juego (TRUE);
+	//crear_juego (TRUE);
 	
 	do {
 		last_time = SDL_GetTicks ();
@@ -521,6 +536,17 @@ void setup (void) {
 		exit (1);
 	}
 	
+	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
+	ttf16_comiccrazy = TTF_OpenFont (buffer_file, 16);
+	if (!ttf16_comiccrazy) {
+		fprintf (stderr,
+			"Failed to load font file 'Comic Crazy'\n"
+			"The error returned by SDL is:\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
+	}
+	
 	#if 0
 	sprintf (buffer_file, "%s%s", systemdata_path, "ccfacefront.ttf");
 	ttf14_facefront = TTF_OpenFont (buffer_file, 14);
@@ -533,16 +559,6 @@ void setup (void) {
 		exit (1);
 	}
 	
-	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
-	ttf16_comiccrazy = TTF_OpenFont (buffer_file, 16);
-	if (!ttf16_comiccrazy) {
-		fprintf (stderr,
-			"Failed to load font file 'Comic Crazy'\n"
-			"The error returned by SDL is:\n"
-			"%s\n", TTF_GetError ());
-		SDL_Quit ();
-		exit (1);
-	}
 	#endif
 	
 	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");

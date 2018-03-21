@@ -49,6 +49,7 @@ enum {
 	IMG_PLAYER_2_NORMAL,
 	IMG_PLAYER_2_HIGHLIGHT,
 	
+	IMG_WAITING,
 	IMG_PLAYER_GREY_SCREEN,
 	
 	IMG_STONE_1_0,
@@ -98,6 +99,20 @@ enum {
 	
 	IMG_FLECHA,
 	
+	IMG_WINDOW_PART,
+	IMG_WINDOW_TAB,
+	IMG_INPUT_BOX,
+	
+	IMG_CHAT_MINI,
+	
+	IMG_BUTTON_CLOSE_UP,
+	IMG_BUTTON_CLOSE_OVER,
+	IMG_BUTTON_CLOSE_DOWN,
+	
+	IMG_BUTTON_LIST_UP,
+	IMG_BUTTON_LIST_OVER,
+	IMG_BUTTON_LIST_DOWN,
+	
 	NUM_IMAGES
 };
 
@@ -120,6 +135,7 @@ extern int use_sound;
 extern Mix_Chunk * sounds[NUM_SOUNDS];
 
 extern TTF_Font *ttf16_burbank_small;
+extern TTF_Font *ttf16_comiccrazy;
 void nueva_conexion (void *ib, const char *texto);
 
 #endif /* __MANCALA_H__ */

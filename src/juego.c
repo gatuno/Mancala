@@ -1,21 +1,21 @@
 /*
  * juego.c
- * This file is part of Find Four
+ * This file is part of Mancala
  *
  * Copyright (C) 2015 - Félix Arreola Rodríguez
  *
- * Find Four is free software; you can redistribute it and/or modify
+ * Mancala is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * Find Four is distributed in the hope that it will be useful,
+ * Mancala is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Find Four. If not, see <http://www.gnu.org/licenses/>.
+ * along with Mancala. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <stdlib.h>
@@ -67,6 +67,7 @@ int juego_mouse_up (Ventana *v, int x, int y);
 void juego_draw_button_close (Ventana *v, int frame);
 void juego_button_frame (Ventana *, int button, int frame);
 void juego_button_event (Ventana *, int button);
+int juego_key_down (Ventana *, SDL_KeyboardEvent *);
 
 void juego_dibujar_resalte (Juego *j);
 void juego_dibujar_tablero (Juego *j);
@@ -148,7 +149,7 @@ static int juego_check_next_cup (Juego *j, int next_cup) {
 
 void juego_draw_board (Juego *j) {
 	SDL_Surface *surface;
-	SDL_Rect rect;
+	SDL_Rect rect, rect2;
 	int g, h, i;
 	MancalaStone *stone;
 	
@@ -163,20 +164,59 @@ void juego_draw_board (Juego *j) {
 	window_update (j->ventana, &rect);
 	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
 	
+	i = IMG_PLAYER_1_NORMAL;
+	if (j->estado == NET_READY && j->inicio == 1 && j->turno == 0) {
+		i = IMG_PLAYER_1_HIGHLIGHT;
+	}
+	
 	/* Dibujar la parte de arriba */
 	rect.x = 14;
 	rect.y = 30;
-	rect.w = images[IMG_PLAYER_1_NORMAL]->w;
-	rect.h = images[IMG_PLAYER_1_NORMAL]->h;
+	rect.w = images[i]->w;
+	rect.h = images[i]->h;
 	
-	SDL_BlitSurface (images[IMG_PLAYER_1_NORMAL], NULL, surface, &rect);
+	SDL_BlitSurface (images[i], NULL, surface, &rect);
+	
+	i = IMG_PLAYER_2_NORMAL;
+	if (j->estado == NET_READY && j->inicio == 0 && j->turno == 0) {
+		i = IMG_PLAYER_2_HIGHLIGHT;
+	}
 	
 	rect.x = 14;
 	rect.y = 132;
-	rect.w = images[IMG_PLAYER_2_NORMAL]->w;
-	rect.h = images[IMG_PLAYER_2_NORMAL]->h;
+	rect.w = images[i]->w;
+	rect.h = images[i]->h;
 	
-	SDL_BlitSurface (images[IMG_PLAYER_2_NORMAL], NULL, surface, &rect);
+	SDL_BlitSurface (images[i], NULL, surface, &rect);
+	
+	if (j->estado == NET_SYN_SENT) {
+		/* Dibujar el icono de cargando en la parte superior */
+		rect2.x = j->timer * 43;
+		rect2.y = 0;
+		rect2.w = 43;
+		rect2.h = 43;
+		
+		rect.x = 40;
+		rect.y = 50;
+		rect.w = 43;
+		rect.h = 43;
+		
+		SDL_BlitSurface (images[IMG_WAITING], &rect2, surface, &rect);
+		
+		/* Dibujar el texto "Esperando jugador" */
+	} else if (j->estado == NET_READY) { /* FIXME:  Y si el nick remoto existe */
+		
+	}
+	
+	/* Dibujar el texto local */
+	if (j->estado == NET_SYN_SENT) {
+		rect.x = 32;
+		rect.y = 180;
+		rect.w = nick_image_blue->w;
+		rect.h = nick_image_blue->h;
+		
+		SDL_BlitSurface (nick_image_blue, NULL, surface, &rect);
+	}
 	
 	/* Dibujar el tablero */
 	rect.x = 29;
@@ -243,7 +283,7 @@ void juego_draw_board (Juego *j) {
 	}
 }
 
-void juego_first_time_draw (Juego  *j) {
+void juego_first_time_draw (Juego *j) {
 	SDL_Surface *surface;
 	
 	surface = window_get_surface (j->ventana);
@@ -257,6 +297,23 @@ void juego_first_time_draw (Juego  *j) {
 	juego_draw_board (j);
 	
 	window_flip (j->ventana);
+}
+
+int juego_timer_callback_cargando (Ventana *v) {
+	Juego *j;
+	SDL_Rect rect, rect2;
+	SDL_Surface *surface;
+	
+	surface = window_get_surface (v);
+	
+	j = (Juego *) window_get_data (v);
+	
+	j->timer++;
+	if (j->timer >= 19) j->timer = 0;
+	
+	juego_draw_board (j);
+	
+	return TRUE;
 }
 
 static int juego_draw_hint (Ventana *v) {
@@ -701,7 +758,6 @@ static int juego_move_stones (Ventana *v) {
 Juego *crear_juego (int top_window) {
 	Juego *j, *lista;
 	int correct;
-	int color;
 	int g, h;
 	MancalaStone *stone, *s_next;
 	float loc8;
@@ -715,25 +771,11 @@ Juego *crear_juego (int top_window) {
 	
 	window_register_mouse_events (j->ventana, juego_mouse_down, juego_mouse_motion, juego_mouse_up);
 	window_register_buttons (j->ventana, JUEGO_NUM_BUTTONS, juego_button_frame, juego_button_event);
+	//window_register_keyboard_events (j->ventana, juego_key_down, NULL);
 	
 	/* Valores propios del juego */
-	j->mapa[0] = j->mapa[1] = j->mapa[2] = j->mapa[3] = j->mapa[4] = j->mapa[5] = 4;
-	j->mapa[7] = j->mapa[8] = j->mapa[9] = j->mapa[10] = j->mapa[11] = j->mapa[12] = 4;
+	memset (j->mapa, 0, sizeof (j->mapa));
 	
-	/*j->mapa[0] = 18;
-	j->mapa[1] = 13;
-	j->mapa[2] = 10;
-	j->mapa[3] = 3;
-	j->mapa[5] = 5;
-	
-	j->mapa[7] = 7;
-	j->mapa[8] = 8;
-	j->mapa[9] = 9;
-	j->mapa[10] = 10;
-	j->mapa[11] = 11;
-	j->mapa[12] = 12;*/
-	
-	j->mapa[6] = j->mapa[13] = 0;
 	j->hint = -1;
 	j->hint_frame = 0;
 	j->anim = ANIM_NONE;
@@ -742,43 +784,13 @@ Juego *crear_juego (int top_window) {
 	
 	j->inicio = 0;
 	j->turno = 0;
+	j->timer = 0;
+	
+	j->estado = NET_CLOSED;
 	
 	/* Armar el tablero */
-	color = 0;
 	for (g = 0; g < 14; g++) {
 		j->tablero[g] = NULL;
-		for (h = 0; h < j->mapa[g]; h++) {
-			stone = (MancalaStone *) malloc (sizeof (MancalaStone));
-			stone->next = NULL;
-			
-			s_next = j->tablero[g];
-			
-			if (s_next == NULL) {
-				j->tablero[g] = stone;
-			} else {
-				while (s_next->next != NULL) {
-					s_next = s_next->next;
-				}
-				
-				s_next->next = stone;
-			}
-			
-			stone->color = color;
-			stone->frame = 0;
-			color++;
-			if (color >= 5) {
-				color = 0;
-			}
-			
-			loc8 = 6.283185 * rand() / (RAND_MAX + 1.0);
-			if (g == 6 || g == 13) {
-				stone->x = ((float) tazas_pos[g][0]) + sin (loc8) * (10.0 * rand() / (RAND_MAX + 1.0));
-				stone->y = ((float) tazas_pos[g][1]) + cos (loc8) * (25.0 * rand() / (RAND_MAX + 1.0));
-			} else {
-				stone->x = ((float) tazas_pos[g][0]) + sin (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
-				stone->y = ((float) tazas_pos[g][1]) + cos (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
-			}
-		}
 	}
 	
 	/* Generar un número local aleatorio */
@@ -798,6 +810,8 @@ Juego *crear_juego (int top_window) {
 	network_game_list = j;
 	
 	/* Dibujar la ventana la primera vez */
+	window_register_timer_events (j->ventana, juego_timer_callback_cargando);
+	window_enable_timer (j->ventana);
 	
 	juego_first_time_draw  (j);
 	
@@ -894,62 +908,64 @@ int juego_mouse_motion (Ventana *v, int x, int y) {
 	
 	j = (Juego *) window_get_data (v);
 	
-	new_hint = -1;
+	if (j->estado == NET_READY) {
+		new_hint = -1;
 	
-	if (x >= 42 && x < 67 && y >= 105 && y < 155) {
-		new_hint = 13;
-	} else if (x >= 239 && x < 264 && y >= 105 && y < 155) {
-		new_hint = 6;
-	} else if (y >= 100 && y < 130) {
-		if (x >= 69 && x < 97) { // 99
-			new_hint = 12;
-		} else if (x >= 97 && x < 125) { // 127
-			new_hint = 11;
-		} else if (x >= 125 && x < 153) { //155
-			/* Hint de la taza 2 */
-			new_hint = 10;
-		} else if (x >= 153 && x < 183) {
-			new_hint = 9;
-		} else if (x >= 183 && x < 211) {
-			new_hint = 8;
-		} else if (x >= 212 && x < 239) {
-			new_hint = 7;
+		if (x >= 42 && x < 67 && y >= 105 && y < 155) {
+			new_hint = 13;
+		} else if (x >= 239 && x < 264 && y >= 105 && y < 155) {
+			new_hint = 6;
+		} else if (y >= 100 && y < 130) {
+			if (x >= 69 && x < 97) { // 99
+				new_hint = 12;
+			} else if (x >= 97 && x < 125) { // 127
+				new_hint = 11;
+			} else if (x >= 125 && x < 153) { //155
+				/* Hint de la taza 2 */
+				new_hint = 10;
+			} else if (x >= 153 && x < 183) {
+				new_hint = 9;
+			} else if (x >= 183 && x < 211) {
+				new_hint = 8;
+			} else if (x >= 212 && x < 239) {
+				new_hint = 7;
+			}
+		} else if (y >= 130 && y < 159) {
+			if (x >= 69 && x < 97) { // 99
+				new_hint = 0;
+			} else if (x >= 97 && x < 125) { // 127
+				new_hint = 1;
+			} else if (x >= 125 && x < 153) { //155
+				/* Hint de la taza 2 */
+				new_hint = 2;
+			} else if (x >= 153 && x < 183) {
+				new_hint = 3;
+			} else if (x >= 183 && x < 211) {
+				new_hint = 4;
+			} else if (x >= 212 && x < 239) {
+				new_hint = 5;
+			}
 		}
-	} else if (y >= 130 && y < 159) {
-		if (x >= 69 && x < 97) { // 99
-			new_hint = 0;
-		} else if (x >= 97 && x < 125) { // 127
-			new_hint = 1;
-		} else if (x >= 125 && x < 153) { //155
-			/* Hint de la taza 2 */
-			new_hint = 2;
-		} else if (x >= 153 && x < 183) {
-			new_hint = 3;
-		} else if (x >= 183 && x < 211) {
-			new_hint = 4;
-		} else if (x >= 212 && x < 239) {
-			new_hint = 5;
-		}
-	}
 	
-	if (j->anim == ANIM_NONE) {
-		if (new_hint != -1 && new_hint != j->hint) {
-			/* Activar el timer para dibujar el hint de la taza */
-			j->hint = new_hint;
-			j->hint_frame = 0;
+		if (j->anim == ANIM_NONE) {
+			if (new_hint != -1 && new_hint != j->hint) {
+				/* Activar el timer para dibujar el hint de la taza */
+				j->hint = new_hint;
+				j->hint_frame = 0;
 		
-			window_register_timer_events (v, juego_draw_hint);
-			window_enable_timer (v);
+				window_register_timer_events (v, juego_draw_hint);
+				window_enable_timer (v);
 			
-			//printf ("Activando hint\n");
-			return TRUE;
-		} else if (new_hint == -1) {
-			//printf ("Desactivando hint\n");
-			j->hint = -1;
-			window_disable_timer (v);
+				//printf ("Activando hint\n");
+				return TRUE;
+			} else if (new_hint == -1 && j->hint != -1) {
+				//printf ("Desactivando hint\n");
+				j->hint = -1;
+				window_disable_timer (v);
 			
-			/* Redibujar el tablero para borrar los hints */
-			juego_draw_board (j);
+				/* Redibujar el tablero para borrar los hints */
+				juego_draw_board (j);
+			}
 		}
 	}
 	
@@ -976,62 +992,64 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 	
 	j = (Juego *) window_get_data (v);
 	
-	move = -1;
+	if (j->estado == NET_READY) {
+		move = -1;
 	
-	if (j->turno == 1 && j->inicio == 1 && y >= 100 && y < 130) {
-		if (x >= 69 && x < 97) { // 99
-			move = 12;
-		} else if (x >= 97 && x < 125) { // 127
-			move = 11;
-		} else if (x >= 125 && x < 153) { //155
-			/* Hint de la taza 2 */
-			move = 10;
-		} else if (x >= 153 && x < 183) {
-			move = 9;
-		} else if (x >= 183 && x < 211) {
-			move = 8;
-		} else if (x >= 212 && x < 239) {
-			move = 7;
+		if (j->turno == 1 && j->inicio == 1 && y >= 100 && y < 130) {
+			if (x >= 69 && x < 97) { // 99
+				move = 12;
+			} else if (x >= 97 && x < 125) { // 127
+				move = 11;
+			} else if (x >= 125 && x < 153) { //155
+				/* Hint de la taza 2 */
+				move = 10;
+			} else if (x >= 153 && x < 183) {
+				move = 9;
+			} else if (x >= 183 && x < 211) {
+				move = 8;
+			} else if (x >= 212 && x < 239) {
+				move = 7;
+			}
+		} else if (j->turno == 0 && j->inicio == 0 && y >= 130 && y < 159) {
+			if (x >= 69 && x < 97) { // 99
+				move = 0;
+			} else if (x >= 97 && x < 125) { // 127
+				move = 1;
+			} else if (x >= 125 && x < 153) { //155
+				/* Hint de la taza 2 */
+				move = 2;
+			} else if (x >= 153 && x < 183) {
+				move = 3;
+			} else if (x >= 183 && x < 211) {
+				move = 4;
+			} else if (x >= 212 && x < 239) {
+				move = 5;
+			}
 		}
-	} else if (j->turno == 0 && j->inicio == 0 && y >= 130 && y < 159) {
-		if (x >= 69 && x < 97) { // 99
-			move = 0;
-		} else if (x >= 97 && x < 125) { // 127
-			move = 1;
-		} else if (x >= 125 && x < 153) { //155
-			/* Hint de la taza 2 */
-			move = 2;
-		} else if (x >= 153 && x < 183) {
-			move = 3;
-		} else if (x >= 183 && x < 211) {
-			move = 4;
-		} else if (x >= 212 && x < 239) {
-			move = 5;
-		}
-	}
 	
-	if (j->anim == ANIM_NONE && move != -1 && j->mapa[move] > 0) {
-		j->anim = ANIM_RAISE_STONE;
+		if (j->anim == ANIM_NONE && move != -1 && j->mapa[move] > 0) {
+			j->anim = ANIM_RAISE_STONE;
 		
-		stone = j->tablero[move];
-		j->mano = NULL;
-		j->move_next_cup = move + 1;
-		while (stone != NULL) {
-			next = stone->next;
+			stone = j->tablero[move];
+			j->mano = NULL;
+			j->move_next_cup = move + 1;
+			while (stone != NULL) {
+				next = stone->next;
 			
-			stone->next = j->mano;
-			j->mano = stone;
+				stone->next = j->mano;
+				j->mano = stone;
 			
-			stone->frame = 1;
-			stone = next;
+				stone->frame = 1;
+				stone = next;
+			}
+		
+			j->mapa[move] = 0;
+			j->tablero[move] = NULL;
+		
+			/* Activar el timer para levantar las piedras */
+			window_register_timer_events (v, juego_move_stones);
+			window_enable_timer (v);
 		}
-		
-		j->mapa[move] = 0;
-		j->tablero[move] = NULL;
-		
-		/* Activar el timer para levantar las piedras */
-		window_register_timer_events (v, juego_move_stones);
-		window_enable_timer (v);
 	}
 	
 	#if 0

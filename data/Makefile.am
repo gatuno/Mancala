@@ -8,6 +8,7 @@ nobase_dist_gamedata_DATA = images/board.png \
 	images/player_2_background.png \
 	images/player_2_highlight.png \
 	images/grey_screen.png \
+	images/waiting.png \
 	images/stone1_0.png \
 	images/stone1_1.png \
 	images/stone1_2.png \
@@ -49,6 +50,16 @@ nobase_dist_gamedata_DATA = images/board.png \
 	images/stone5_6.png \
 	images/stone5_7.png \
 	images/flecha.png \
+	images/window.png \
+	images/tab.png \
+	images/inputbox.png \
+	images/chat.png \
+	images/button-up.png \
+	images/button-over.png \
+	images/button-down.png \
+	images/button-list-up.png \
+	images/button-list-over.png \
+	images/button-list-down.png \
 	burbanksb.ttf \
 	comicrazy.ttf
 
