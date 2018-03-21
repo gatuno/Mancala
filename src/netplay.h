@@ -27,10 +27,10 @@
 
 enum {
 	TYPE_SYN = 1,
-	/*TYPE_RES_SYN,
-	TYPE_TRN,
-	TYPE_TRN_ACK,
-	TYPE_TRN_ACK_GAME,
+	TYPE_RES_SYN,
+	TYPE_MOV,
+	TYPE_MOV_ACK,
+	/*TYPE_TRN_ACK_GAME,
 	TYPE_KEEP_ALIVE,
 	TYPE_KEEP_ALIVE_ACK,
 	TYPE_SYN_NICK,
@@ -51,8 +51,8 @@ typedef struct {
 	union {
 		struct {
 			char nick[NICK_SIZE];
-			uint8_t type_game;
 			uint8_t initial;
+			uint8_t type_game;
 		};
 	};
 } MCMessageNet;
@@ -66,5 +66,8 @@ SOCKET findfour_get_socket4 (void);
 #else
 int findfour_get_socket4 (void);
 #endif
+
+void process_netevent (void);
+void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *peer, socklen_t peer_socklen);
 
 #endif /* __NETPLAY_H__ */

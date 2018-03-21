@@ -165,7 +165,7 @@ void juego_draw_board (Juego *j) {
 	SDL_BlitSurface (images[IMG_WINDOW], &rect, surface, &rect);
 	
 	i = IMG_PLAYER_1_NORMAL;
-	if (j->estado == NET_READY && j->inicio == 1 && j->turno == 0) {
+	if (j->estado == NET_READY && j->turno != j->inicio) {
 		i = IMG_PLAYER_1_HIGHLIGHT;
 	}
 	
@@ -178,7 +178,7 @@ void juego_draw_board (Juego *j) {
 	SDL_BlitSurface (images[i], NULL, surface, &rect);
 	
 	i = IMG_PLAYER_2_NORMAL;
-	if (j->estado == NET_READY && j->inicio == 0 && j->turno == 0) {
+	if (j->estado == NET_READY && j->turno == j->inicio) {
 		i = IMG_PLAYER_2_HIGHLIGHT;
 	}
 	
@@ -203,19 +203,36 @@ void juego_draw_board (Juego *j) {
 		
 		SDL_BlitSurface (images[IMG_WAITING], &rect2, surface, &rect);
 		
-		/* Dibujar el texto "Esperando jugador" */
-	} else if (j->estado == NET_READY) { /* FIXME:  Y si el nick remoto existe */
+		/* TODO: Dibujar el texto "Esperando jugador" */
+	} else if (j->estado == NET_READY && j->nick_remoto_image != NULL) {
+		rect.x = 32;
+		rect.y = 50;
+		if (j->turno != j->inicio) {
+			rect.w = j->nick_remoto_image->w;
+			rect.h = j->nick_remoto_image->h;
 		
+			SDL_BlitSurface (j->nick_remoto_image, NULL, surface, &rect);
+		} else {
+			rect.w = j->nick_remoto_image_blue->w;
+			rect.h = j->nick_remoto_image_blue->h;
+		
+			SDL_BlitSurface (j->nick_remoto_image_blue, NULL, surface, &rect);
+		}
 	}
 	
-	/* Dibujar el texto local */
-	if (j->estado == NET_SYN_SENT) {
-		rect.x = 32;
-		rect.y = 180;
+	/* Dibujar el nick local */
+	rect.x = 32;
+	rect.y = 180;
+	if (j->estado == NET_SYN_SENT || j->turno != j->inicio) {
 		rect.w = nick_image_blue->w;
 		rect.h = nick_image_blue->h;
 		
 		SDL_BlitSurface (nick_image_blue, NULL, surface, &rect);
+	} else {
+		rect.w = nick_image->w;
+		rect.h = nick_image->h;
+		
+		SDL_BlitSurface (nick_image, NULL, surface, &rect);
 	}
 	
 	/* Dibujar el tablero */
@@ -691,6 +708,8 @@ static int juego_move_stones (Ventana *v) {
 				j->turno++;
 				if (j->turno > 1) j->turno = 0;
 				j->anim = ANIM_NONE;
+				
+				juego_draw_board (j);
 				return FALSE;
 			}
 		}
@@ -758,9 +777,7 @@ static int juego_move_stones (Ventana *v) {
 Juego *crear_juego (int top_window) {
 	Juego *j, *lista;
 	int correct;
-	int g, h;
-	MancalaStone *stone, *s_next;
-	float loc8;
+	int g;
 	
 	/* Crear un nuevo objeto Juego */
 	j = (Juego *) malloc (sizeof (Juego));
@@ -787,6 +804,9 @@ Juego *crear_juego (int top_window) {
 	j->timer = 0;
 	
 	j->estado = NET_CLOSED;
+	j->retry = 0;
+	j->nick_remoto_image = NULL;
+	j->nick_remoto_image_blue = NULL;
 	
 	/* Armar el tablero */
 	for (g = 0; g < 14; g++) {
@@ -1084,5 +1104,93 @@ void juego_draw_button_close (Ventana *v, int frame) {
 	SDL_BlitSurface (images[IMG_BUTTON_CLOSE_UP + frame], NULL, surface, &rect);
 	window_update (v, &rect);
 	#endif
+}
+
+void recibir_nick (Juego *j, const char *nick) {
+	SDL_Color blanco;
+	SDL_Color negro;
+	SDL_Rect rect;
+	SDL_Surface *surface;
+	int first_time = 0;
+	
+	memcpy (j->nick_remoto, nick, sizeof (j->nick_remoto));
+	
+	surface = window_get_surface (j->ventana);
+	
+	/* Renderizar el nick del otro jugador */
+	blanco.r = blanco.g = blanco.b = 255;
+	negro.r = negro.g = negro.b = 0;
+	if (j->nick_remoto_image != NULL) {
+		SDL_FreeSurface (j->nick_remoto_image);
+	} else {
+		first_time = 1;
+	}
+	j->nick_remoto_image = draw_text_with_shadow (ttf16_comiccrazy, 2, j->nick_remoto, blanco, negro);
+	
+	blanco.r = 0xD5; blanco.g = 0xF1; blanco.b = 0xFF;
+	negro.r = 0x33; negro.g = 0x66; negro.b = 0x99;
+	if (j->nick_remoto_image_blue != NULL) {
+		SDL_FreeSurface (j->nick_remoto_image_blue);
+	}
+	j->nick_remoto_image_blue = draw_text_with_shadow (ttf16_comiccrazy, 2, j->nick_remoto, blanco, negro);
+	
+	/* Quitar el timer solo si es la primera vez que recibo el nick */
+	if (first_time == 1) {
+		window_disable_timer (j->ventana);
+	}
+	
+	juego_draw_board (j);
+}
+
+void juego_start (Juego *j) {
+	int color;
+	int g, h;
+	MancalaStone *stone, *s_next;
+	float loc8;
+	
+	j->mapa[0] = j->mapa[1] = j->mapa[2] = j->mapa[3] = j->mapa[4] = j->mapa[5] = 4;
+	j->mapa[7] = j->mapa[8] = j->mapa[9] = j->mapa[10] = j->mapa[11] = j->mapa[12] = 4;
+	j->mapa[6] = j->mapa[13] = 0;
+	
+	color = 0;
+	
+	for (g = 0; g < 14; g++) {
+		j->tablero[g] = NULL;
+		
+		for (h = 0; h < j->mapa[g]; h++) {
+			stone = (MancalaStone *) malloc (sizeof (MancalaStone));
+			stone->next = NULL;
+
+			s_next = j->tablero[g];
+
+			if (s_next == NULL) {
+				j->tablero[g] = stone;
+			} else {
+				while (s_next->next != NULL) {
+					s_next = s_next->next;
+				}
+
+				s_next->next = stone;
+			}
+
+			stone->color = color;
+			stone->frame = 0;
+			color++;
+			if (color >= 5) {
+				color = 0;
+			}
+
+			loc8 = 6.283185 * rand() / (RAND_MAX + 1.0);
+			if (g == 6 || g == 13) {
+				stone->x = ((float) tazas_pos[g][0]) + sin (loc8) * (10.0 * rand() / (RAND_MAX + 1.0));
+				stone->y = ((float) tazas_pos[g][1]) + cos (loc8) * (25.0 * rand() / (RAND_MAX + 1.0));
+			} else {
+				stone->x = ((float) tazas_pos[g][0]) + sin (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
+				stone->y = ((float) tazas_pos[g][1]) + cos (loc8) * (7.5 * rand() / (RAND_MAX + 1.0));
+			}
+		}
+	}
+	
+	juego_draw_board (j);
 }
 

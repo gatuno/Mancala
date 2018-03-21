@@ -1,5 +1,5 @@
 /*
- * netplay.h
+ * netplay.c
  * This file is part of Mancala
  *
  * Copyright (C) 2018 - Félix Arreola Rodríguez
@@ -89,6 +89,30 @@ struct sockaddr_in6 mcast_addr6;
 Uint32 multicast_timer;*/
 
 void conectar_juego (Juego *juego, const char *nick);
+
+int sockaddr_cmp (struct sockaddr *x, struct sockaddr *y) {
+#define CMP(a, b) if (a != b) return a < b ? -1 : 1
+
+	CMP(x->sa_family, y->sa_family);
+
+	if (x->sa_family == AF_INET) {
+		struct sockaddr_in *xin = (void*)x, *yin = (void*)y;
+		CMP(ntohl(xin->sin_addr.s_addr), ntohl(yin->sin_addr.s_addr));
+		CMP(ntohs(xin->sin_port), ntohs(yin->sin_port));
+	} else if (x->sa_family == AF_INET6) {
+		struct sockaddr_in6 *xin6 = (void*)x, *yin6 = (void*)y;
+		int r = memcmp (xin6->sin6_addr.s6_addr, yin6->sin6_addr.s6_addr, sizeof(xin6->sin6_addr.s6_addr));
+		if (r != 0) return r;
+		CMP(ntohs(xin6->sin6_port), ntohs(yin6->sin6_port));
+		CMP(xin6->sin6_flowinfo, yin6->sin6_flowinfo);
+		CMP(xin6->sin6_scope_id, yin6->sin6_scope_id);
+	} else {
+		return -1; /* Familia desconocida */
+	}
+
+#undef CMP
+	return 0;
+}
 
 #ifdef __MINGW32__
 int findfour_try_netinit4 (int puerto) {
@@ -568,3 +592,304 @@ void conectar_juego (Juego *juego, const char *nick) {
 	juego->estado = NET_SYN_SENT;
 }
 
+void enviar_res_syn (Juego *juego, const char *nick) {
+	char buffer_send[128];
+	uint16_t temp;
+	/* Rellenar con la firma del protocolo MC */
+	buffer_send[0] = 'M';
+	buffer_send[1] = 'C';
+	
+	/* Poner el campo de la versión */
+	buffer_send[2] = 0;
+	
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_RES_SYN;
+	
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	/* El nick local */
+	strncpy (&buffer_send[8], nick, sizeof (char) * NICK_SIZE);
+	buffer_send[7 + NICK_SIZE] = '\0';
+	
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 8 + NICK_SIZE, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	juego->last_response = SDL_GetTicks ();
+	
+	//printf ("Envie un RES_SYN. Estoy listo para jugar. Mi local prot: %i\n", juego->local);
+	//juego->resend_nick = 0;
+	//juego->wait_nick_ack = 0;
+	juego->estado = NET_READY;
+}
+
+int unpack (MCMessageNet *msg, char *buffer, size_t len) {
+	uint16_t temp;
+	
+	/* Vaciar la estructura */
+	memset (msg, 0, sizeof (MCMessageNet));
+	
+	if (len < 4) return -1;
+	
+	if (buffer[0] != 'M' || buffer[1] != 'C') {
+		fprintf (stderr, "Protocol Mismatch!\n");
+		
+		return -1;
+	}
+	
+	if (buffer[2] != 0) {
+		fprintf (stderr, "Version mismatch. Expecting 0\n");
+		
+		return -1;
+	}
+	
+	msg->type = buffer[3];
+	
+	if (msg->type == TYPE_SYN) {
+		if (len < (10 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* No hay puerto remoto, aún */
+		
+		/* Copiar el nick */
+		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
+		msg->nick[NICK_SIZE - 1] = 0;
+		
+		/* Copiar quién empieza */
+		msg->initial = buffer[8 + NICK_SIZE];
+		
+		msg->type_game = buffer[9 + NICK_SIZE];
+		
+		/* Validar el nick */
+		if (!is_utf8 (msg->nick)) {
+			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
+		}
+	} else if (msg->type == TYPE_RES_SYN) {
+		if (len < (8 + NICK_SIZE)) return -1; /* Oops, tamaño incorrecto */
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+		
+		/* Copiar el nick */
+		strncpy (msg->nick, &buffer[8], sizeof (char) * NICK_SIZE);
+		msg->nick[NICK_SIZE - 1] = 0;
+		
+		/* Validar el nick */
+		if (!is_utf8 (msg->nick)) {
+			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
+		}
+	} else {
+		return -1;
+	}
+	
+	return 0;
+}
+
+int do_read (void *buffer, size_t buffer_len, struct sockaddr *src_addr, socklen_t *addrlen) {
+	int len;
+	if (fd_socket4 >= 0) {
+		/* Intentar una lectura del socket de IPv4 */
+		len = recvfrom (fd_socket4, buffer, buffer_len, 0, src_addr, addrlen);
+		
+		if (len >= 0) return len;
+	}
+	
+	if (fd_socket6 >= 0) {
+		/* Intentar una lectura del socket de IPv6 */
+		len = recvfrom (fd_socket6, buffer, buffer_len, 0, src_addr, addrlen);
+		
+		if (len >= 0) return len;
+	}
+	
+	return -1;
+}
+
+void process_netevent (void) {
+	char buffer [256];
+	Juego *juego, *next;
+	MCMessageNet message;
+	struct sockaddr_storage peer;
+	socklen_t peer_socklen;
+	int len;
+	int manejado;
+
+#ifdef HAVE_WORKING_FORK
+	pending_query ();
+#endif
+	
+	do {
+		peer_socklen = sizeof (peer);
+		
+		/* Intentar hacer otra lectura para procesamiento */
+		len = do_read (buffer, sizeof (buffer), (struct sockaddr *) &peer, &peer_socklen);
+		
+		if (len < 0) break;
+		
+		/* Detectar si este es un paquete STUN */
+		#if 0
+		if (buffer[0] == 0x01) {
+			parse_stun_message (buffer, len);
+			continue;
+		}
+		#endif
+		if (unpack (&message, buffer, len) < 0) {
+			fprintf (stderr, "Wrong packet format\n");
+			continue;
+		}
+		#if 0
+		if (message.type == TYPE_MCAST_ANNOUNCE) {
+			/* Multicast de anuncio de partida de red */
+			buddy_list_mcast_add (message.nick, (struct sockaddr *) &peer, peer_socklen);
+			continue;
+		} else if (message.type == TYPE_MCAST_FIN) {
+			/* Multicast de eliminación de partida */
+			buddy_list_mcast_remove ((struct sockaddr *) &peer, peer_socklen);
+			continue;
+		}
+		#endif
+		/* Si es una conexión inicial (SYN), verificar que ésta no sea una repetición de algo que ya hayamos enviado */
+		if (message.type == TYPE_SYN) {
+			juego = get_game_list ();
+			
+			manejado = FALSE;
+			while (juego != NULL) {
+				if (message.local == juego->remote && sockaddr_cmp ((struct sockaddr *) &juego->peer, (struct sockaddr *) &peer) == 0) {
+					/* Coincidencia por puerto remoto y dirección, es una repetición */
+					juego->retry++;
+					enviar_res_syn (juego, nick_global);
+					manejado = TRUE;
+					break;
+				}
+				juego = (Juego *) juego->next;
+			}
+			
+			if (manejado) continue;
+			
+			/* Si no fué manejado es conexión nueva */
+			//printf ("Nueva conexión entrante\n");
+			if (message.type_game != 0) {
+				fprintf (stderr, "Wrong game format\n");
+				continue;
+			}
+			
+			juego = crear_juego (FALSE);
+			
+			/* Copiar la dirección IP del peer */
+			memcpy (&juego->peer, &peer, peer_socklen);
+			juego->peer_socklen = peer_socklen;
+			
+			/* Copiar el puerto remoto */
+			juego->remote = message.local;
+			
+			/* Copiar quién empieza */
+			if (message.initial == 0) {
+				juego->inicio = 1;
+			} else if (message.initial == 255) {
+				juego->inicio = 0;
+			}
+			
+			juego->estado = NET_READY;
+			recibir_nick (juego, message.nick);
+			enviar_res_syn (juego, nick_global);
+			juego_start (juego);
+			
+			continue;
+		}
+		
+		/* Buscar el puerto local que coincide con el mensaje */
+		juego = get_game_list ();
+		while (juego != NULL) {
+			if (message.remote == juego->local) {
+				break;
+			}
+			juego = juego->next;
+		}
+		
+		if (juego == NULL) {
+			/* TODO: Ningún juego coincide con el puerto mencionado, enviar un paquete RESET */
+			continue;
+		}
+		
+		#if 0
+		if (message.type == TYPE_FIN) {
+			if (message.fin == NET_USER_QUIT && juego->nick_remoto[0] != 0) {
+				message_add (MSG_NORMAL, _("Ok"), _("%s has closed the game"), juego->nick_remoto);
+			} else {
+				message_add (MSG_ERROR, _("Ok"), _("The game has been closed\nErr: %i"), message.fin);
+			}
+			enviar_fin_ack (juego);
+			
+			/* Eliminar este juego */
+			eliminar_juego (juego);
+		} else if (message.type == TYPE_KEEP_ALIVE) {
+			/* Keep alive en cualquier momento se responde con Keep Alive ACK */
+			enviar_keep_alive_ack (juego);
+		} else if (message.type == TYPE_SYN_NICK) {
+			/* Si se recibe un cambio de nick en cualquier momento se recibe y se actualiza */
+			enviar_syn_nick_ack (juego);
+			
+			recibir_nick (juego, message.nick);
+		} else if (message.type == TYPE_SYN_NICK_ACK) {
+			juego->wait_nick_ack = 0;
+		} else if ((message.type == TYPE_RES_SYN && juego->estado != NET_SYN_SENT) ||
+		    (message.type == TYPE_TRN && (juego->estado != NET_READY && juego->estado != NET_WAIT_ACK)) ||
+		    (message.type == TYPE_TRN_ACK && juego->estado != NET_WAIT_ACK) ||
+		    (message.type == TYPE_TRN_ACK_GAME && juego->estado != NET_WAIT_WINNER) ||
+		    (message.type == TYPE_FIN_ACK && juego->estado != NET_WAIT_CLOSING) ||
+		    (message.type == TYPE_KEEP_ALIVE_ACK && juego->estado != NET_READY)) {
+			fprintf (stderr, "Wrong packet - Out of sync\n");
+		#endif
+		if ((message.type == TYPE_RES_SYN && juego->estado != NET_SYN_SENT)) {
+			fprintf (stderr, "Wrong packet - Out of sync\n");
+		} else if (message.type == TYPE_RES_SYN) {
+			/* Copiar el nick del otro jugador */
+			juego->estado = NET_READY;
+			recibir_nick (juego, message.nick);
+			
+			/* Copiar el puerto remoto */
+			juego->remote = message.local;
+			
+			//printf ("Recibí RES SYN. Su puerto remoto es: %i\n", juego->remote);
+			juego_start (juego);
+		}
+		#if 0
+		} else if (message.type == TYPE_TRN) {
+			/* Si estaba en el estado WAIT_ACK, y recibo un movimiento,
+			 * eso confirma el turno que estaba esperando y pasamos a recibir el movimiento */
+			if (juego->estado == NET_WAIT_ACK && message.turno == juego->turno) {
+				//printf ("Movimiento de turno cuando esperaba confirmación\n");
+				juego->estado = NET_READY;
+			}
+			
+			/* Recibir el movimiento */
+			recibir_movimiento (juego, message.turno, message.col, message.fila);
+		} else if (message.type == TYPE_TRN_ACK) {
+			/* Verificar que el turno confirmado sea el local */
+			
+			if (message.turn_ack == juego->turno) {
+				juego->estado = NET_READY;
+			} else {
+				//printf ("FIXME: ???\n");
+			}
+		} else if (message.type == TYPE_TRN_ACK_GAME) {
+			/* Última confirmación de turno */
+			juego->estado = NET_CLOSED;
+		} else if (message.type == TYPE_FIN_ACK) {
+			/* La última confirmación que necesitaba */
+			/* Eliminar este objeto juego */
+			eliminar_juego (juego);
+		} else if (message.type == TYPE_KEEP_ALIVE_ACK) {
+			juego->retry = 0;
+		}
+		#endif
+	} while (1);
+	
+	//check_for_retry ();
+}

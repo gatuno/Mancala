@@ -93,10 +93,15 @@ typedef struct _Juego {
 	
 	/* Estado del protocolo de red */
 	int estado;
+	int retry;
 	
 	/* La dirección del otro peer */
 	struct sockaddr_storage peer;
 	socklen_t peer_socklen;
+	
+	/* El nick del otro jugador */
+	char nick_remoto[NICK_SIZE];
+	SDL_Surface *nick_remoto_image, *nick_remoto_image_blue;
 	
 	Uint32 last_response;
 	uint16_t local, remote;
@@ -108,6 +113,8 @@ typedef struct _Juego {
 Juego *get_game_list (void);
 Juego *crear_juego (int top_window);
 void eliminar_juego (Juego *);
+void recibir_nick (Juego *j, const char *nick);
+void juego_start (Juego *j);
 
 #endif /* __JUEGO_H__ */
 

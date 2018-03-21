@@ -257,7 +257,7 @@ void nueva_conexion (void *d, const char *texto) {
 	}
 	hostname = strdup (texto);
 	
-	valido = analizador_hostname_puerto (texto, hostname, &puerto, 3300);
+	valido = analizador_hostname_puerto (texto, hostname, &puerto, 3301);
 	
 	if (valido) {
 		/* Ejecutar la resolución de nombres primero, conectar después */
@@ -363,7 +363,7 @@ int game_loop (void) {
 		last_time = SDL_GetTicks ();
 		
 		/* Antes de procesar los eventos locales, procesar la red */
-		//process_netevent ();
+		process_netevent ();
 		
 		while (SDL_PollEvent(&event) > 0) {
 			if (event.type == SDL_QUIT) {
