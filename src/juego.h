@@ -43,10 +43,10 @@ enum {
 	
 	NET_READY,
 	
-	#if 0
-	/* Espero la confirmación de turno */
+	/* Espero la confirmación de movimiento */
 	NET_WAIT_ACK,
 	
+	#if 0
 	/* Espero la confirmación de turno y que el otro admita que gané (o empatamos) */
 	NET_WAIT_WINNER,
 	
@@ -68,6 +68,13 @@ typedef struct _MancalaStone {
 	struct _MancalaStone *next;
 } MancalaStone;
 
+typedef struct {
+	int cup_sent;
+	int mov;
+	int effect;
+	int cups_diffs[28];
+} MancalaMov;
+
 /* Estructuras */
 typedef struct _Juego {
 	Ventana *ventana;
@@ -79,7 +86,11 @@ typedef struct _Juego {
 	/* Quién inicia el juego y quién está jugando */
 	int inicio;
 	int turno;
-	int timer;
+	int loading_timer;
+	int mov;
+	
+	/* Guardar el último movimiento enviado */
+	MancalaMov last;
 	
 	int anim;
 	int move_counter;
@@ -115,6 +126,7 @@ Juego *crear_juego (int top_window);
 void eliminar_juego (Juego *);
 void recibir_nick (Juego *j, const char *nick);
 void juego_start (Juego *j);
+int juego_simulate (Juego *j, int cup, int *diffs);
 
 #endif /* __JUEGO_H__ */
 

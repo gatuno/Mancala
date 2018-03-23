@@ -33,8 +33,6 @@ enum {
 	/*TYPE_TRN_ACK_GAME,
 	TYPE_KEEP_ALIVE,
 	TYPE_KEEP_ALIVE_ACK,
-	TYPE_SYN_NICK,
-	TYPE_SYN_NICK_ACK,
 	
 	TYPE_MCAST_ANNOUNCE = 32,
 	TYPE_MCAST_FIN,
@@ -69,5 +67,6 @@ int findfour_get_socket4 (void);
 
 void process_netevent (void);
 void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *peer, socklen_t peer_socklen);
+void enviar_movimiento (Juego *juego, int mov, int cup, int effect);
 
 #endif /* __NETPLAY_H__ */

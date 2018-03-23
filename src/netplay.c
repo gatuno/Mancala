@@ -624,6 +624,80 @@ void enviar_res_syn (Juego *juego, const char *nick) {
 	juego->estado = NET_READY;
 }
 
+void enviar_movimiento (Juego *juego, int mov, int cup, int effect) {
+	char buffer_send[128];
+	uint16_t temp;
+	int pos;
+	int g;
+	
+	/* Rellenar con la firma del protocolo MC */
+	buffer_send[0] = 'M';
+	buffer_send[1] = 'C';
+	
+	/* Poner el campo de la versión */
+	buffer_send[2] = 0;
+	
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_MOV;
+	
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	buffer_send[8] = mov;
+	buffer_send[9] = cup;
+	buffer_send[10] = effect;
+	
+	pos = 12;
+	g = 0;
+	while (juego->last.cups_diffs[g] != -1) {
+		buffer_send[pos] = juego->last.cups_diffs[g];
+		buffer_send[pos + 1] = juego->last.cups_diffs[g + 1];
+		g = g + 2;
+		pos = pos + 2;
+	}
+	
+	buffer_send[11] = (g / 2);
+	
+	buffer_send[pos] = 0; /* Envio de nick nuevo */
+	
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, pos + 1, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	juego->last_response = SDL_GetTicks ();
+	
+	//printf ("Envié un movimiento.\n");
+	
+	juego->estado = NET_WAIT_ACK;
+}
+
+void enviar_mov_ack (Juego *juego) {
+	char buffer_send[128];
+	uint16_t temp;
+	/* Rellenar con la firma del protocolo MC */
+	buffer_send[0] = 'M';
+	buffer_send[1] = 'C';
+	
+	/* Poner el campo de la versión */
+	buffer_send[2] = 2;
+	
+	/* El campo de tipo */
+	buffer_send[3] = TYPE_MOV_ACK;
+	
+	temp = htons (juego->local);
+	memcpy (&buffer_send[4], &temp, sizeof (temp));
+	
+	temp = htons (juego->remote);
+	memcpy (&buffer_send[6], &temp, sizeof (temp));
+	
+	buffer_send[8] = juego->turno;
+	
+	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 9, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
+	juego->last_response = SDL_GetTicks ();
+	
+	//printf ("Envié una confirmación de movimiento.\n");
+}
+
 int unpack (MCMessageNet *msg, char *buffer, size_t len) {
 	uint16_t temp;
 	

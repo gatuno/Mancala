@@ -58,7 +58,8 @@ enum {
 	ANIM_WAIT_DROP,
 	ANIM_CAPTURE,
 	ANIM_FREE_TURN,
-	ANIM_CAPTURE_TURN
+	ANIM_CAPTURE_TURN,
+	ANIM_WAIT_ACK
 };
 
 int juego_mouse_down (Ventana *v, int x, int y);
@@ -71,6 +72,7 @@ int juego_key_down (Ventana *, SDL_KeyboardEvent *);
 
 void juego_dibujar_resalte (Juego *j);
 void juego_dibujar_tablero (Juego *j);
+void juego_invert_diffs (int *diffs);
 
 /* Algunas constantes */
 const int tazas_pos[14][2] = {
@@ -130,7 +132,7 @@ Juego *get_game_list (void) {
 static int juego_check_next_cup (Juego *j, int next_cup) {
 	int mancala_enemiga;
 	
-	if (j->turno == 0) {
+	if (j->inicio == 0) {
 		mancala_enemiga = 13;
 	} else {
 		mancala_enemiga = 6;
@@ -177,8 +179,9 @@ void juego_draw_board (Juego *j) {
 	
 	SDL_BlitSurface (images[i], NULL, surface, &rect);
 	
+	/* Ahora la parte de abajo */
 	i = IMG_PLAYER_2_NORMAL;
-	if (j->estado == NET_READY && j->turno == j->inicio) {
+	if (j->estado != NET_SYN_SENT && j->turno == j->inicio) {
 		i = IMG_PLAYER_2_HIGHLIGHT;
 	}
 	
@@ -191,7 +194,7 @@ void juego_draw_board (Juego *j) {
 	
 	if (j->estado == NET_SYN_SENT) {
 		/* Dibujar el icono de cargando en la parte superior */
-		rect2.x = j->timer * 43;
+		rect2.x = j->loading_timer * 43;
 		rect2.y = 0;
 		rect2.w = 43;
 		rect2.h = 43;
@@ -204,7 +207,7 @@ void juego_draw_board (Juego *j) {
 		SDL_BlitSurface (images[IMG_WAITING], &rect2, surface, &rect);
 		
 		/* TODO: Dibujar el texto "Esperando jugador" */
-	} else if (j->estado == NET_READY && j->nick_remoto_image != NULL) {
+	} else if (j->nick_remoto_image != NULL) {
 		rect.x = 32;
 		rect.y = 50;
 		if (j->turno != j->inicio) {
@@ -228,6 +231,26 @@ void juego_draw_board (Juego *j) {
 		rect.h = nick_image_blue->h;
 		
 		SDL_BlitSurface (nick_image_blue, NULL, surface, &rect);
+	} else if (j->estado == NET_WAIT_ACK && j->anim == ANIM_WAIT_ACK) {
+		/* Cuando estamos esperando una confirmación, dibujar el circulo de cargando a un lado del nick */
+		rect2.x = j->loading_timer * 43;
+		rect2.y = 0;
+		rect2.w = 43;
+		rect2.h = 43;
+		
+		rect.x = 30;
+		rect.y = 168;
+		rect.w = 43;
+		rect.h = 43;
+		
+		SDL_BlitSurface (images[IMG_WAITING], &rect2, surface, &rect);
+		
+		rect.x = 75;
+		rect.y = 180;
+		rect.w = nick_image->w;
+		rect.h = nick_image->h;
+		
+		SDL_BlitSurface (nick_image, NULL, surface, &rect);
 	} else {
 		rect.w = nick_image->w;
 		rect.h = nick_image->h;
@@ -325,8 +348,8 @@ int juego_timer_callback_cargando (Ventana *v) {
 	
 	j = (Juego *) window_get_data (v);
 	
-	j->timer++;
-	if (j->timer >= 19) j->timer = 0;
+	j->loading_timer++;
+	if (j->loading_timer >= 19) j->loading_timer = 0;
 	
 	juego_draw_board (j);
 	
@@ -343,6 +366,7 @@ static int juego_draw_hint (Ventana *v) {
 	j = (Juego *) window_get_data (v);
 	surface = window_get_surface (v);
 	
+	
 	if (j->hint == -1) {
 		return FALSE;
 	}
@@ -350,6 +374,12 @@ static int juego_draw_hint (Ventana *v) {
 	j->hint_frame++;
 	
 	if (j->hint_frame > 6) {
+		
+		/* Si aun estamos esperando un ACK, cambiar la función */
+		if (j->estado == NET_WAIT_ACK) {
+			window_register_timer_events (j->ventana, juego_timer_callback_cargando);
+			return TRUE;
+		}
 		return FALSE;
 	}
 	
@@ -373,7 +403,10 @@ static int juego_draw_hint (Ventana *v) {
 	
 	negro.r = negro.g = negro.b = 255;
 	
-	if (j->turno == 0 && j->inicio == 0 && j->hint >= 0 && j->hint < 6) {
+	if (j->estado == NET_WAIT_ACK) {
+		rect2.y = 0;
+		negro.r = negro.g = negro.b = 0;
+	} else if (j->turno == 0 && j->inicio == 0 && j->hint >= 0 && j->hint < 6) {
 		rect2.y = 0;
 		negro.r = negro.g = negro.b = 0;
 	} else if (j->turno == 1 && j->inicio == 1 && j->hint > 6 && j->hint < 13) {
@@ -695,21 +728,26 @@ static int juego_move_stones (Ventana *v) {
 				/* Captura */
 				j->anim = ANIM_CAPTURE;
 				j->move_counter = 0;
-				
-				g = 12 - j->move_last_cup;
 			} else if (j->mapa[j->move_last_cup] == 1 && j->inicio == 1 && j->move_last_cup > 6 && j->move_last_cup < 13) {
 				/* Captura */
 				j->anim = ANIM_CAPTURE;
 				j->move_counter = 0;
-				
-				g = 12 - j->move_last_cup;
 			} else {
 				/* Cambiar el turno */
+				j->mov++;
 				j->turno++;
 				if (j->turno > 1) j->turno = 0;
-				j->anim = ANIM_NONE;
 				
+				if (j->estado == NET_WAIT_ACK) {
+					j->anim = ANIM_WAIT_ACK;
+					j->loading_timer = 0;
+					juego_draw_board (j);
+					return TRUE;
+				}
+				
+				j->anim = ANIM_NONE;
 				juego_draw_board (j);
+				
 				return FALSE;
 			}
 		}
@@ -723,6 +761,15 @@ static int juego_move_stones (Ventana *v) {
 				j->turno++;
 				if (j->turno > 1) j->turno = 0;
 			}
+			j->mov++;
+			
+			if (j->estado == NET_WAIT_ACK) {
+				j->anim = ANIM_WAIT_ACK;
+				j->loading_timer = 0;
+				juego_draw_board (j);
+				return TRUE;
+			}
+			
 			juego_draw_board (j);
 			j->anim = ANIM_NONE;
 			return FALSE;
@@ -769,6 +816,11 @@ static int juego_move_stones (Ventana *v) {
 		}
 		
 		juego_draw_board (j);
+	} else if (j->anim == ANIM_WAIT_ACK) {
+		j->loading_timer++;
+		if (j->loading_timer >= 19) j->loading_timer = 0;
+		
+		juego_draw_board (j);
 	}
 	
 	return TRUE;
@@ -801,7 +853,9 @@ Juego *crear_juego (int top_window) {
 	
 	j->inicio = 0;
 	j->turno = 0;
-	j->timer = 0;
+	j->loading_timer = 0;
+	j->mov = 0;
+	j->last.cup_sent = -1;
 	
 	j->estado = NET_CLOSED;
 	j->retry = 0;
@@ -1049,7 +1103,23 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 	
 		if (j->anim == ANIM_NONE && move != -1 && j->mapa[move] > 0) {
 			j->anim = ANIM_RAISE_STONE;
-		
+			
+			/* Enviar el movimiento por red */
+			h = juego_simulate (j, move, j->last.cups_diffs);
+			
+			j->last.mov = j->mov;
+			j->last.cup_sent = move;
+			j->last.effect = h;
+			
+			if (j->inicio == 1) {
+				/* Invertir los valores para enviar por red */
+				j->last.cup_sent = (j->last.cup_sent + 7) % 14;
+				
+				juego_invert_diffs (j->last.cups_diffs);
+			}
+			
+			enviar_movimiento (j, j->last.mov, j->last.cup_sent, j->last.effect);
+			
 			stone = j->tablero[move];
 			j->mano = NULL;
 			j->move_next_cup = move + 1;
@@ -1192,5 +1262,107 @@ void juego_start (Juego *j) {
 	}
 	
 	juego_draw_board (j);
+}
+
+int juego_simulate (Juego *j, int cup, int *diffs) {
+	int mapa[14];
+	int piezas;
+	int next_cup;
+	int last_cup;
+	int end;
+	int g, h;
+	
+	memcpy (mapa, j->mapa, sizeof (mapa));
+	
+	piezas = mapa[cup];
+	mapa[cup] = 0;
+	next_cup = cup;
+	
+	while (piezas > 0) {
+		next_cup++;
+		next_cup = juego_check_next_cup (j, next_cup);
+		last_cup = next_cup;
+		
+		mapa[next_cup]++;
+		
+		piezas--;
+	}
+	
+	end = 0;
+	if (mapa[last_cup] == 1 && j->inicio == 0 && last_cup < 6) {
+		end |= 2;
+	} else if (mapa[last_cup] == 1 && j->inicio == 1 && last_cup > 6 && last_cup < 13) {
+		end |= 2;
+	}
+	
+	/* Si ocurrió una captura, reocger todas las piedras y mandarlas al mancala */
+	if (end & 2) {
+		g = 12 - last_cup;
+		if (last_cup < 6) {
+			mapa[6] += mapa[g];
+			mapa[6] += mapa[last_cup];
+		} else {
+			mapa[13] += mapa[g];
+			mapa[13] += mapa[last_cup];
+		}
+		mapa[g] = 0;
+		mapa[last_cup] = 0;
+	}
+	
+	/* Checar si es el final del juego */
+	if (!mapa[0] && !mapa[1] && !mapa[2] && !mapa[3] && !mapa[4] && !mapa[5]) {
+		end |= 4;
+	} else if (!mapa[7] && !mapa[8] && !mapa[9] && !mapa[10] && !mapa[11] && !mapa[12]) {
+		end |= 4;
+	}
+	
+	if (last_cup == 6 || last_cup == 13) {
+		end |= 1;
+	}
+	
+	/* Calcular diferencias entre el mapa inicial y el resultado después del movimiento */
+	h = 0;
+	for (g = 0; g < 13; g++) {
+		if (j->mapa[g] != mapa[g]) {
+			diffs[h] = g;
+			diffs[h + 1] = mapa[g];
+			
+			h = h + 2;
+		}
+	}
+	
+	diffs[h] = -1;
+	
+	return end;
+}
+
+int compare_diffs (const void *a, const void *b) {
+	const int *izq, *der;
+	
+	izq = (const int *) a;
+	der = (const int *) b;
+	
+	if (*izq < *der) {
+		return -1;
+	} else if (*izq == *der) {
+		return 0;
+	}
+	
+	return 1;
+}
+
+void juego_invert_diffs (int *diffs) {
+	int count = 0;
+	int g = 0;
+	
+	while (diffs[g] != -1) {
+		diffs[g] = (diffs[g] + 7) % 14;
+		
+		g = g + 2;
+	}
+	
+	count = g / 2;
+	
+	qsort (diffs, count, sizeof (int) * 2, compare_diffs);
 }
 
