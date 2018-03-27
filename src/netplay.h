@@ -21,6 +21,8 @@
 #ifndef __NETPLAY_H__
 #define __NETPLAY_H__
 
+#include "juego.h"
+
 #define NET_CONN_TIMER 3400
 #define NET_MCAST_TIMER 12000
 #define NET_MCAST_TIMEOUT 120000
@@ -46,11 +48,15 @@ typedef struct {
 	uint8_t version;
 	uint8_t type;
 	uint16_t local, remote;
+	char nick[NICK_SIZE];
 	union {
 		struct {
-			char nick[NICK_SIZE];
 			uint8_t initial;
 			uint8_t type_game;
+		};
+		struct {
+			MancalaMov movement;
+			uint8_t has_nick;
 		};
 	};
 } MCMessageNet;

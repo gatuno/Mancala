@@ -856,6 +856,8 @@ Juego *crear_juego (int top_window) {
 	j->loading_timer = 0;
 	j->mov = 0;
 	j->last.cup_sent = -1;
+	j->last.next = NULL;
+	j->queue_movs = NULL;
 	
 	j->estado = NET_CLOSED;
 	j->retry = 0;
@@ -1119,6 +1121,7 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 			}
 			
 			enviar_movimiento (j, j->last.mov, j->last.cup_sent, j->last.effect);
+			j->loading_timer = 0;
 			
 			stone = j->tablero[move];
 			j->mano = NULL;
@@ -1322,7 +1325,7 @@ int juego_simulate (Juego *j, int cup, int *diffs) {
 	
 	/* Calcular diferencias entre el mapa inicial y el resultado después del movimiento */
 	h = 0;
-	for (g = 0; g < 13; g++) {
+	for (g = 0; g <= 13; g++) {
 		if (j->mapa[g] != mapa[g]) {
 			diffs[h] = g;
 			diffs[h + 1] = mapa[g];
@@ -1364,5 +1367,109 @@ void juego_invert_diffs (int *diffs) {
 	count = g / 2;
 	
 	qsort (diffs, count, sizeof (int) * 2, compare_diffs);
+}
+
+void pop_queue_move (Juego *j) {
+	MancalaMov *mov;
+	MancalaMov sim;
+	MancalaStone *stone, *next_stone;
+	int g;
+	
+	mov = j->queue_movs;
+	
+	j->queue_movs = mov->next;
+	
+	/* Verificar que sea el turno del otro para aceptar un movimiento */
+	if (j->inicio == j->turno) {
+		/* Error de movimiento, enviar fin de turno equivocado */
+		printf ("Error de movimiento, era MI turno\n");
+		free (mov);
+		return;
+	}
+	
+	/* Ejecutar la simulación con el movimiento actual, si la simulación falla, enviar fin */
+	sim.effect = juego_simulate (j, mov->cup_sent, sim.cups_diffs);
+	
+	if (sim.effect != mov->effect) {
+		/* Diferente efecto, bye */
+		printf ("Error de movimiento, efecto diferente\n");
+		free (mov);
+		return;
+	}
+	
+	/* Comparar las tazas */
+	g = 0;
+	while (mov->cups_diffs[g] != -1) {
+		if (sim.cups_diffs[g] != mov->cups_diffs[g] ||
+		    sim.cups_diffs[g + 1] != mov->cups_diffs[g + 1]) {
+			printf ("Error de movimiento, tazas difieren: %i -> %i, esperado: %i -> %i\n", mov->cups_diffs[g], mov->cups_diffs[g + 1], sim.cups_diffs[g], sim.cups_diffs[g + 1]);
+			
+			free (mov);
+			return;
+		}
+		g = g + 2;
+	}
+	
+	/* Si llegamos hasta aquí, el movimiento es válido. Ejecutarlo */
+	j->anim = ANIM_RAISE_STONE;
+			
+	stone = j->tablero[mov->cup_sent];
+	j->mano = NULL;
+	j->move_next_cup = mov->cup_sent + 1;
+	while (stone != NULL) {
+		next_stone = stone->next;
+	
+		stone->next = j->mano;
+		j->mano = stone;
+	
+		stone->frame = 1;
+		stone = next_stone;
+	}
+
+	j->mapa[mov->cup_sent] = 0;
+	j->tablero[mov->cup_sent] = NULL;
+
+	/* Activar el timer para levantar las piedras */
+	window_register_timer_events (j->ventana, juego_move_stones);
+	window_enable_timer (j->ventana);
+	
+	free (mov);
+}
+
+void recibir_movimiento (Juego *j, int cup, int mov, int effect, int *cups_diffs) {
+	MancalaMov *new, *p;
+	
+	/* De forma inmediata, enviar la confirmación del movimiento */
+	
+	/* Colocar el movimiento en la lista de movimientos pendientes */
+	new = (MancalaMov *) malloc (sizeof (MancalaMov));
+	
+	new->cup_sent = cup;
+	new->mov = mov;
+	new->effect = effect;
+	memcpy (new->cups_diffs, cups_diffs, sizeof (new->cups_diffs));
+	if (j->inicio == 1) {
+		/* Invertir la tazas cambiadas */
+		new->cup_sent = (new->cup_sent + 7) % 14;
+		juego_invert_diffs (new->cups_diffs);
+	}
+	
+	new->next = NULL;
+	if (j->queue_movs == NULL) {
+		j->queue_movs = new;
+	} else {
+		p = j->queue_movs;
+		
+		while (p->next != NULL) {
+			p = p->next;
+		}
+		
+		p->next = new;
+	}
+	
+	/* Si no hay nada pendiente que animar, sacar y ejecutar una animación */
+	if (j->anim == ANIM_NONE) {
+		pop_queue_move (j);
+	}
 }
 

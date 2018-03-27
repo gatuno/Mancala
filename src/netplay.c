@@ -700,6 +700,7 @@ void enviar_mov_ack (Juego *juego) {
 
 int unpack (MCMessageNet *msg, char *buffer, size_t len) {
 	uint16_t temp;
+	int g, h, pos;
 	
 	/* Vaciar la estructura */
 	memset (msg, 0, sizeof (MCMessageNet));
@@ -758,6 +759,48 @@ int unpack (MCMessageNet *msg, char *buffer, size_t len) {
 		/* Validar el nick */
 		if (!is_utf8 (msg->nick)) {
 			strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
+		}
+	} else if (msg->type == TYPE_MOV) {
+		if (len < 12) return -1; /* Tamaño mínimo incorrecto */
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+		
+		msg->movement.mov = buffer[8];
+		msg->movement.cup_sent = buffer[9];
+		msg->movement.effect = buffer[10];
+		
+		/* Cantidad de tazas cambiadas */
+		h = buffer[11];
+		
+		if (len < 12 + (h * 2)) return -1;
+		for (g = 0, pos = 12; g < h; g = g + 1, pos = pos + 2) {
+			msg->movement.cups_diffs[g * 2] = buffer[pos];
+			msg->movement.cups_diffs[g * 2 + 1] = buffer[pos + 1];
+		}
+		
+		/* Cerrar las tazas */
+		msg->movement.cups_diffs[g * 2] = -1;
+		
+		/* Leer si hubo un cambio de nick */
+		msg->has_nick = buffer[pos];
+		
+		if (msg->has_nick) {
+			if (len < (pos + NICK_SIZE)) return -1;
+			strncpy (msg->nick, &buffer[pos], sizeof (char) * NICK_SIZE);
+		
+			msg->nick[NICK_SIZE - 1] = 0;
+		
+			/* Validar el nick */
+			if (!is_utf8 (msg->nick)) {
+				strncpy (msg->nick, _("No name"), sizeof (char) * NICK_SIZE);
+			}
+		} else {
+			msg->nick[0] = 0;
 		}
 	} else {
 		return -1;
@@ -932,18 +975,18 @@ void process_netevent (void) {
 			
 			//printf ("Recibí RES SYN. Su puerto remoto es: %i\n", juego->remote);
 			juego_start (juego);
-		}
-		#if 0
-		} else if (message.type == TYPE_TRN) {
+		} else if (message.type == TYPE_MOV) {
 			/* Si estaba en el estado WAIT_ACK, y recibo un movimiento,
 			 * eso confirma el turno que estaba esperando y pasamos a recibir el movimiento */
-			if (juego->estado == NET_WAIT_ACK && message.turno == juego->turno) {
+			if (juego->estado == NET_WAIT_ACK && message.movement.mov == juego->mov) {
 				//printf ("Movimiento de turno cuando esperaba confirmación\n");
 				juego->estado = NET_READY;
 			}
 			
 			/* Recibir el movimiento */
-			recibir_movimiento (juego, message.turno, message.col, message.fila);
+			recibir_movimiento (juego, message.movement.cup_sent, message.movement.mov, message.movement.effect, message.movement.cups_diffs);
+		}
+		#if 0
 		} else if (message.type == TYPE_TRN_ACK) {
 			/* Verificar que el turno confirmado sea el local */
 			

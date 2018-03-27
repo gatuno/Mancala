@@ -68,11 +68,13 @@ typedef struct _MancalaStone {
 	struct _MancalaStone *next;
 } MancalaStone;
 
-typedef struct {
+typedef struct _MancalaMov {
 	int cup_sent;
 	int mov;
 	int effect;
 	int cups_diffs[28];
+	
+	struct _MancalaMov *next;
 } MancalaMov;
 
 /* Estructuras */
@@ -91,6 +93,9 @@ typedef struct _Juego {
 	
 	/* Guardar el último movimiento enviado */
 	MancalaMov last;
+	
+	/* Cola de movimientos pendientes por animar */
+	MancalaMov *queue_movs;
 	
 	int anim;
 	int move_counter;
@@ -127,6 +132,7 @@ void eliminar_juego (Juego *);
 void recibir_nick (Juego *j, const char *nick);
 void juego_start (Juego *j);
 int juego_simulate (Juego *j, int cup, int *diffs);
+void recibir_movimiento (Juego *j, int cup, int mov, int effect, int *cups_diffs);
 
 #endif /* __JUEGO_H__ */
 
