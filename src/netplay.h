@@ -74,5 +74,6 @@ int findfour_get_socket4 (void);
 void process_netevent (void);
 void conectar_con_sockaddr (Juego *juego, const char *nick, struct sockaddr *peer, socklen_t peer_socklen);
 void enviar_movimiento (Juego *juego, int mov, int cup, int effect);
+void enviar_mov_ack (Juego *juego);
 
 #endif /* __NETPLAY_H__ */

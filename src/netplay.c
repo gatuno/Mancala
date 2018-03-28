@@ -679,7 +679,7 @@ void enviar_mov_ack (Juego *juego) {
 	buffer_send[1] = 'C';
 	
 	/* Poner el campo de la versión */
-	buffer_send[2] = 2;
+	buffer_send[2] = 0;
 	
 	/* El campo de tipo */
 	buffer_send[3] = TYPE_MOV_ACK;
@@ -690,7 +690,7 @@ void enviar_mov_ack (Juego *juego) {
 	temp = htons (juego->remote);
 	memcpy (&buffer_send[6], &temp, sizeof (temp));
 	
-	buffer_send[8] = juego->turno;
+	buffer_send[8] = juego->mov;
 	
 	sendto ((juego->peer.ss_family == AF_INET ? fd_socket4 : fd_socket6), buffer_send, 9, 0, (struct sockaddr *)&juego->peer, juego->peer_socklen);
 	juego->last_response = SDL_GetTicks ();
@@ -802,6 +802,17 @@ int unpack (MCMessageNet *msg, char *buffer, size_t len) {
 		} else {
 			msg->nick[0] = 0;
 		}
+	} else if (msg->type == TYPE_MOV_ACK) {
+		if (len < 9) return -1; /* Oops, tamaño incorrecto */
+		/* Copiar el puerto local */
+		memcpy (&temp, &buffer[4], sizeof (temp));
+		msg->local = ntohs (temp);
+		
+		/* Copiar el puerto remoto */
+		memcpy (&temp, &buffer[6], sizeof (temp));
+		msg->remote = ntohs (temp);
+		
+		msg->movement.mov = buffer[8];
 	} else {
 		return -1;
 	}
@@ -979,22 +990,22 @@ void process_netevent (void) {
 			/* Si estaba en el estado WAIT_ACK, y recibo un movimiento,
 			 * eso confirma el turno que estaba esperando y pasamos a recibir el movimiento */
 			if (juego->estado == NET_WAIT_ACK && message.movement.mov == juego->mov) {
-				//printf ("Movimiento de turno cuando esperaba confirmación\n");
+				printf ("Movimiento de turno cuando esperaba confirmación\n");
 				juego->estado = NET_READY;
 			}
 			
 			/* Recibir el movimiento */
 			recibir_movimiento (juego, message.movement.cup_sent, message.movement.mov, message.movement.effect, message.movement.cups_diffs);
-		}
-		#if 0
-		} else if (message.type == TYPE_TRN_ACK) {
+		} else if (message.type == TYPE_MOV_ACK) {
 			/* Verificar que el turno confirmado sea el local */
 			
-			if (message.turn_ack == juego->turno) {
+			if (message.movement.mov == juego->mov) {
 				juego->estado = NET_READY;
 			} else {
 				//printf ("FIXME: ???\n");
 			}
+		}
+		#if 0
 		} else if (message.type == TYPE_TRN_ACK_GAME) {
 			/* Última confirmación de turno */
 			juego->estado = NET_CLOSED;

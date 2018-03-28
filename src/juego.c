@@ -68,7 +68,6 @@ int juego_mouse_up (Ventana *v, int x, int y);
 void juego_draw_button_close (Ventana *v, int frame);
 void juego_button_frame (Ventana *, int button, int frame);
 void juego_button_event (Ventana *, int button);
-int juego_key_down (Ventana *, SDL_KeyboardEvent *);
 
 void juego_dibujar_resalte (Juego *j);
 void juego_dibujar_tablero (Juego *j);
@@ -132,7 +131,7 @@ Juego *get_game_list (void) {
 static int juego_check_next_cup (Juego *j, int next_cup) {
 	int mancala_enemiga;
 	
-	if (j->inicio == 0) {
+	if (j->inicio == j->turno) {
 		mancala_enemiga = 13;
 	} else {
 		mancala_enemiga = 6;
@@ -406,10 +405,7 @@ static int juego_draw_hint (Ventana *v) {
 	if (j->estado == NET_WAIT_ACK) {
 		rect2.y = 0;
 		negro.r = negro.g = negro.b = 0;
-	} else if (j->turno == 0 && j->inicio == 0 && j->hint >= 0 && j->hint < 6) {
-		rect2.y = 0;
-		negro.r = negro.g = negro.b = 0;
-	} else if (j->turno == 1 && j->inicio == 1 && j->hint > 6 && j->hint < 13) {
+	} else if (j->turno == j->inicio && j->hint >= 0 && j->hint < 6) {
 		rect2.y = 0;
 		negro.r = negro.g = negro.b = 0;
 	}
@@ -718,23 +714,19 @@ static int juego_move_stones (Ventana *v) {
 		if (h == FALSE) {
 			/* Aquí checar el turno y cambiar */
 			/* Si la última piedra ya cayó, revisar si hay captura o juega de nuevo */
-			if (j->move_last_cup == 6 && j->inicio == 0) {
+			if (j->move_last_cup == 6 || j->move_last_cup == 13) {
 				j->anim = ANIM_FREE_TURN;
 				j->move_counter = 0;
-			} else if (j->move_last_cup == 13 && j->inicio == 1) {
-				j->anim = ANIM_FREE_TURN;
-				j->move_counter = 0;
-			} else if (j->mapa[j->move_last_cup] == 1 && j->inicio == 0 && j->move_last_cup < 6) {
+			} else if (j->mapa[j->move_last_cup] == 1 && j->inicio == j->turno && j->move_last_cup < 6) {
 				/* Captura */
 				j->anim = ANIM_CAPTURE;
 				j->move_counter = 0;
-			} else if (j->mapa[j->move_last_cup] == 1 && j->inicio == 1 && j->move_last_cup > 6 && j->move_last_cup < 13) {
+			} else if (j->mapa[j->move_last_cup] == 1 && j->inicio != j->turno && j->move_last_cup > 6 && j->move_last_cup < 13) {
 				/* Captura */
 				j->anim = ANIM_CAPTURE;
 				j->move_counter = 0;
 			} else {
 				/* Cambiar el turno */
-				j->mov++;
 				j->turno++;
 				if (j->turno > 1) j->turno = 0;
 				
@@ -761,7 +753,6 @@ static int juego_move_stones (Ventana *v) {
 				j->turno++;
 				if (j->turno > 1) j->turno = 0;
 			}
-			j->mov++;
 			
 			if (j->estado == NET_WAIT_ACK) {
 				j->anim = ANIM_WAIT_ACK;
@@ -960,7 +951,7 @@ int juego_mouse_down (Ventana *v, int x, int y) {
 	Juego *j;
 	j = (Juego *) window_get_data (v);
 	
-	if (x >= 64 && x >= 102 && x < 206) {
+	if (x >= 102 && x < 206 && y < 22) {
 		/* Click por el agarre */
 		window_start_drag (v, x, y);
 		return TRUE;
@@ -1070,23 +1061,8 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 	
 	if (j->estado == NET_READY) {
 		move = -1;
-	
-		if (j->turno == 1 && j->inicio == 1 && y >= 100 && y < 130) {
-			if (x >= 69 && x < 97) { // 99
-				move = 12;
-			} else if (x >= 97 && x < 125) { // 127
-				move = 11;
-			} else if (x >= 125 && x < 153) { //155
-				/* Hint de la taza 2 */
-				move = 10;
-			} else if (x >= 153 && x < 183) {
-				move = 9;
-			} else if (x >= 183 && x < 211) {
-				move = 8;
-			} else if (x >= 212 && x < 239) {
-				move = 7;
-			}
-		} else if (j->turno == 0 && j->inicio == 0 && y >= 130 && y < 159) {
+		
+		if (j->inicio == j->turno && y >= 130 && y < 159) {
 			if (x >= 69 && x < 97) { // 99
 				move = 0;
 			} else if (x >= 97 && x < 125) { // 127
@@ -1102,8 +1078,8 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 				move = 5;
 			}
 		}
-	
-		if (j->anim == ANIM_NONE && move != -1 && j->mapa[move] > 0) {
+		
+		if (j->anim == ANIM_NONE && move != -1 && j->mapa[move] > 0 && j->inicio == j->turno) {
 			j->anim = ANIM_RAISE_STONE;
 			
 			/* Enviar el movimiento por red */
@@ -1121,6 +1097,7 @@ int juego_mouse_up (Ventana *v, int x, int y) {
 			}
 			
 			enviar_movimiento (j, j->last.mov, j->last.cup_sent, j->last.effect);
+			j->mov++;
 			j->loading_timer = 0;
 			
 			stone = j->tablero[move];
@@ -1412,16 +1389,16 @@ void pop_queue_move (Juego *j) {
 	
 	/* Si llegamos hasta aquí, el movimiento es válido. Ejecutarlo */
 	j->anim = ANIM_RAISE_STONE;
-			
+	
 	stone = j->tablero[mov->cup_sent];
 	j->mano = NULL;
 	j->move_next_cup = mov->cup_sent + 1;
 	while (stone != NULL) {
 		next_stone = stone->next;
-	
+		
 		stone->next = j->mano;
 		j->mano = stone;
-	
+		
 		stone->frame = 1;
 		stone = next_stone;
 	}
@@ -1439,7 +1416,48 @@ void pop_queue_move (Juego *j) {
 void recibir_movimiento (Juego *j, int cup, int mov, int effect, int *cups_diffs) {
 	MancalaMov *new, *p;
 	
+	/* Revisar número de movimiento */
+	if (j->mov != mov) {
+		if (mov == j->mov - 1) {
+			/* Buscar un ganador, si lo hay, enviar el ACK_GAME
+			if (j->win != 0) {
+				enviar_mov_ack_finish (j, GAME_FINISH_LOST);
+				j->estado = NET_CLOSED;
+			} else if (j->turno == 42) {
+				enviar_mov_ack_finish (j, GAME_FINISH_TIE);
+				j->estado = NET_CLOSED;
+			} else {*/
+				enviar_mov_ack (j);
+			//}
+		} else {
+			fprintf (stderr, "Wrong turn number\n");
+			/*j->last_fin = NET_DISCONNECT_WRONG_TURN;
+			goto fin_and_close;*/
+			return;
+		}
+	}
+	
+	/* Validar la taza enviada sea del oponente */
+	if (j->inicio == 0) {
+		/* Del 0 al 5 son mis tazas */
+		if (cup < 6) {
+			fprintf (stderr, "Wrong cup received\n");
+			/* Enviar fin */
+			return;
+		}
+	} else if (j->inicio == 1) {
+		/* Del 7 al 12 son mis tazas */
+		if (cup >= 7 && cup <= 12) {
+			fprintf (stderr, "Wrong cup received\n");
+			/* Enviar fin */
+			return;
+		}
+	}
+	
+	j->mov = mov + 1;
+	
 	/* De forma inmediata, enviar la confirmación del movimiento */
+	enviar_mov_ack (j);
 	
 	/* Colocar el movimiento en la lista de movimientos pendientes */
 	new = (MancalaMov *) malloc (sizeof (MancalaMov));
