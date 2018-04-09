@@ -151,17 +151,23 @@ enum {
 /* Prototipos de función */
 int game_loop (void);
 void setup (void);
+void setup_scale_texts (void);
 SDL_Surface * set_video_mode(unsigned);
 
 /* Variables globales */
 SDL_Surface * screen;
 SDL_Surface * images [NUM_IMAGES];
 SDL_Surface * text_waiting;
+
 SDL_Surface * nick_image = NULL;
 SDL_Surface * nick_image_blue = NULL;
+
 SDL_Surface * free_turn_text[4] = {NULL, NULL, NULL, NULL};
 SDL_Surface * go_again_text[4] = {NULL, NULL, NULL, NULL};
 SDL_Surface * capture_text[4] = {NULL, NULL, NULL, NULL};
+SDL_Surface * score_text[4] = {NULL, NULL, NULL, NULL};
+SDL_Surface * game_over_text[4] = {NULL, NULL, NULL, NULL};
+SDL_Surface *score_n_white[49], *score_n_black[49];
 
 int use_sound;
 Mix_Chunk * sounds[NUM_SOUNDS];
@@ -429,8 +435,6 @@ void setup (void) {
 	SDL_Color blanco, negro;
 	int g;
 	char buffer_file[8192];
-	float sw, sh;
-	int resw, resh;
 	
 	/* Inicializar el Video SDL */
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -536,6 +540,28 @@ void setup (void) {
 		exit (1);
 	}
 	
+	font = TTF_OpenFont (buffer_file, 12);
+	if (!font) {
+		fprintf (stderr,
+			"Failed to load font file 'Burbank Small Bold'\n"
+			"The error returned by SDL is:\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
+	}
+	
+	/* Generar todos los posibles scores */
+	blanco.r = blanco.g = blanco.b = 0xFF;
+	negro.r = negro.g = negro.b = 0;
+	
+	for (g = 0; g <= 48; g++) {
+		sprintf (buffer_file, "Score: %i", g);
+		score_n_black[g] = TTF_RenderUTF8_Blended (font, buffer_file, negro);
+		score_n_white[g] = TTF_RenderUTF8_Blended (font, buffer_file, blanco);
+	}
+	
+	TTF_CloseFont (font);
+	
 	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
 	ttf16_comiccrazy = TTF_OpenFont (buffer_file, 16);
 	if (!ttf16_comiccrazy) {
@@ -578,10 +604,40 @@ void setup (void) {
 	negro.r = 0x00; negro.g = 0x00; negro.b = 0x00;
 	free_turn_text[3] = draw_text_with_shadow (font, 4, "FREE TURN", blanco, negro);
 	capture_text[3] = draw_text_with_shadow (font, 4, "CAPTURE", blanco, negro);
+	game_over_text[3] = draw_text_with_shadow (font, 4, "GAME OVER", blanco, negro);
 	
 	TTF_CloseFont (font);
 	
-	/* Generar los 3 textos escalados */
+	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
+	font = TTF_OpenFont (buffer_file, 24);
+	if (!font) {
+		fprintf (stderr,
+			"Failed to load font file 'Comic Crazy'\n"
+			"The error returned by SDL is:\n"
+			"%s\n", TTF_GetError ());
+		SDL_Quit ();
+		exit (1);
+	}
+	
+	/* Dibujar el texto de "Go Again!" */
+	blanco.r = 0xFF; blanco.g = 0xFF; blanco.b = 0xFF;
+	negro.r = 0x00; negro.g = 0x00; negro.b = 0x00;
+	go_again_text[3] = draw_text_with_shadow (font, 4, "GO AGAIN!", blanco, negro);
+	score_text[3] = draw_text_with_shadow (font, 4, "SCORE", blanco, negro);
+	
+	TTF_CloseFont (font);
+	
+	setup_background ();
+	
+	setup_scale_texts ();
+	srand (SDL_GetTicks ());
+}
+
+void setup_scale_texts (void) {
+	float sw, sh;
+	int resw, resh;
+	
+	/* Free turn */
 	sw = 0.5 * ((float) free_turn_text[3]->w);
 	sh = 0.5 * ((float) free_turn_text[3]->h);
 	
@@ -599,7 +655,7 @@ void setup (void) {
 	free_turn_text[1] = rotozoomSurfaceXY (free_turn_text[3], resw, free_turn_text[3]->h, 1);
 	free_turn_text[2] = rotozoomSurfaceXY (free_turn_text[3], free_turn_text[3]->w, resh, 1);
 	
-	/* Generar los 3 textos escalados */
+	/* Capture text */
 	sw = 0.5 * ((float) capture_text[3]->w);
 	sh = 0.5 * ((float) capture_text[3]->h);
 	
@@ -617,25 +673,25 @@ void setup (void) {
 	capture_text[1] = rotozoomSurfaceXY (capture_text[3], resw, capture_text[3]->h, 1);
 	capture_text[2] = rotozoomSurfaceXY (capture_text[3], capture_text[3]->w, resh, 1);
 	
-	sprintf (buffer_file, "%s%s", systemdata_path, "comicrazy.ttf");
-	font = TTF_OpenFont (buffer_file, 24);
-	if (!font) {
-		fprintf (stderr,
-			"Failed to load font file 'Comic Crazy'\n"
-			"The error returned by SDL is:\n"
-			"%s\n", TTF_GetError ());
-		SDL_Quit ();
-		exit (1);
-	}
+	/* Gameover */
+	sw = 0.5 * ((float) game_over_text[3]->w);
+	sh = 0.5 * ((float) game_over_text[3]->h);
 	
-	/* Dibujar el texto de "Go Again!" */
-	blanco.r = 0xFF; blanco.g = 0xFF; blanco.b = 0xFF;
-	negro.r = 0x00; negro.g = 0x00; negro.b = 0x00;
-	go_again_text[3] = draw_text_with_shadow (font, 4, "GO AGAIN!", blanco, negro);
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
 	
-	TTF_CloseFont (font);
+	game_over_text[0] = rotozoomSurfaceXY (game_over_text[3], resw, resh, 1);
 	
-	/* Generar los 3 textos escalados */
+	sw = 1.1 * ((float) game_over_text[3]->w);
+	sh = 1.2 * ((float) game_over_text[3]->h);
+	
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
+	
+	game_over_text[1] = rotozoomSurfaceXY (game_over_text[3], resw, game_over_text[3]->h, 1);
+	game_over_text[2] = rotozoomSurfaceXY (game_over_text[3], game_over_text[3]->w, resh, 1);
+	
+	/* Go again */
 	sw = 0.5 * ((float) go_again_text[3]->w);
 	sh = 0.5 * ((float) go_again_text[3]->h);
 	
@@ -643,7 +699,7 @@ void setup (void) {
 	resh = (int) (sh + 0.5);
 	
 	go_again_text[0] = rotozoomSurfaceXY (go_again_text[3], resw, resh, 1);
-	/* Generar los 3 textos escalados */
+	
 	sw = 1.1 * ((float) go_again_text[3]->w);
 	sh = 1.2 * ((float) go_again_text[3]->h);
 	
@@ -653,7 +709,22 @@ void setup (void) {
 	go_again_text[1] = rotozoomSurfaceXY (go_again_text[3], resw, go_again_text[3]->h, 1);
 	go_again_text[2] = rotozoomSurfaceXY (go_again_text[3], go_again_text[3]->w, resh, 1);
 	
-	setup_background ();
-	srand (SDL_GetTicks ());
+	/* Score */
+	sw = 0.5 * ((float) score_text[3]->w);
+	sh = 0.5 * ((float) score_text[3]->h);
+	
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
+	
+	score_text[0] = rotozoomSurfaceXY (score_text[3], resw, resh, 1);
+	
+	sw = 1.1 * ((float) score_text[3]->w);
+	sh = 1.2 * ((float) score_text[3]->h);
+	
+	resw = (int) (sw + 0.5);
+	resh = (int) (sh + 0.5);
+	
+	score_text[1] = rotozoomSurfaceXY (score_text[3], resw, score_text[3]->h, 1);
+	score_text[2] = rotozoomSurfaceXY (score_text[3], score_text[3]->w, resh, 1);
 }
 

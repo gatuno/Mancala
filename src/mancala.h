@@ -130,6 +130,7 @@ extern SDL_Surface *text_waiting;
 extern SDL_Surface *free_turn_text[4];
 extern SDL_Surface *go_again_text[4];
 extern SDL_Surface *capture_text[4];
+extern SDL_Surface *score_n_white[49], *score_n_black[49];
 
 extern int use_sound;
 extern Mix_Chunk * sounds[NUM_SOUNDS];

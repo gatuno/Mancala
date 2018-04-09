@@ -149,7 +149,7 @@ static int juego_check_next_cup (Juego *j, int next_cup) {
 }
 
 void juego_draw_board (Juego *j) {
-	SDL_Surface *surface;
+	SDL_Surface *surface, *score_img;
 	SDL_Rect rect, rect2;
 	int g, h, i;
 	MancalaStone *stone;
@@ -214,11 +214,29 @@ void juego_draw_board (Juego *j) {
 			rect.h = j->nick_remoto_image->h;
 		
 			SDL_BlitSurface (j->nick_remoto_image, NULL, surface, &rect);
+			
+			score_img = score_n_black[j->score_other];
+			
+			rect.y = 54;
+			rect.x = 272 - score_img->w;
+			rect.h = score_img->h;
+			rect.w = score_img->w;
+			
+			SDL_BlitSurface (score_img, NULL, surface, &rect);
 		} else {
 			rect.w = j->nick_remoto_image_blue->w;
 			rect.h = j->nick_remoto_image_blue->h;
 		
 			SDL_BlitSurface (j->nick_remoto_image_blue, NULL, surface, &rect);
+			
+			score_img = score_n_white[j->score_other];
+			
+			rect.y = 54;
+			rect.x = 272 - score_img->w;
+			rect.h = score_img->h;
+			rect.w = score_img->w;
+			
+			SDL_BlitSurface (score_img, NULL, surface, &rect);
 		}
 	}
 	
@@ -230,6 +248,15 @@ void juego_draw_board (Juego *j) {
 		rect.h = nick_image_blue->h;
 		
 		SDL_BlitSurface (nick_image_blue, NULL, surface, &rect);
+		
+		score_img = score_n_white[j->score];
+		
+		rect.y = 184;
+		rect.x = 272 - score_img->w;
+		rect.h = score_img->h;
+		rect.w = score_img->w;
+		
+		SDL_BlitSurface (score_img, NULL, surface, &rect);
 	} else if (j->estado == NET_WAIT_ACK && j->anim == ANIM_WAIT_ACK) {
 		/* Cuando estamos esperando una confirmación, dibujar el circulo de cargando a un lado del nick */
 		rect2.x = j->loading_timer * 43;
@@ -250,11 +277,29 @@ void juego_draw_board (Juego *j) {
 		rect.h = nick_image->h;
 		
 		SDL_BlitSurface (nick_image, NULL, surface, &rect);
+		
+		score_img = score_n_black[j->score];
+		
+		rect.y = 184;
+		rect.x = 272 - score_img->w;
+		rect.h = score_img->h;
+		rect.w = score_img->w;
+		
+		SDL_BlitSurface (score_img, NULL, surface, &rect);
 	} else {
 		rect.w = nick_image->w;
 		rect.h = nick_image->h;
 		
 		SDL_BlitSurface (nick_image, NULL, surface, &rect);
+		
+		score_img = score_n_black[j->score];
+		
+		rect.y = 184;
+		rect.x = 272 - score_img->w;
+		rect.h = score_img->h;
+		rect.w = score_img->w;
+		
+		SDL_BlitSurface (score_img, NULL, surface, &rect);
 	}
 	
 	/* Dibujar el tablero */
@@ -644,6 +689,25 @@ static void juego_draw_message (Ventana *v) {
 	}
 }
 
+static void juego_recalc_scores (Juego *j) {
+	int g;
+	int total;
+	
+	total = 0;
+	for (g = 0; g <= 6; g++) {
+		total += j->mapa[g];
+	}
+	
+	j->score = total;
+	
+	total = 0;
+	for (g = 7; g <= 13; g++) {
+		total += j->mapa[g];
+	}
+	
+	j->score_other = total;
+}
+
 static int juego_move_stones (Ventana *v) {
 	Juego *j;
 	MancalaStone *stone, *current_stone, **prev_stone;
@@ -727,6 +791,7 @@ static int juego_move_stones (Ventana *v) {
 				j->move_counter = 0;
 			} else {
 				/* Cambiar el turno */
+				juego_recalc_scores (j);
 				j->turno++;
 				if (j->turno > 1) j->turno = 0;
 				
@@ -750,6 +815,7 @@ static int juego_move_stones (Ventana *v) {
 		if (j->move_counter > 60) {
 			if (j->anim == ANIM_CAPTURE_TURN) {
 				/* Cambiar el turno */
+				juego_recalc_scores (j);
 				j->turno++;
 				if (j->turno > 1) j->turno = 0;
 			}
@@ -849,6 +915,8 @@ Juego *crear_juego (int top_window) {
 	j->last.cup_sent = -1;
 	j->last.next = NULL;
 	j->queue_movs = NULL;
+	
+	j->score = j->score_other = 0;
 	
 	j->estado = NET_CLOSED;
 	j->retry = 0;
@@ -1197,10 +1265,13 @@ void juego_start (Juego *j) {
 	int g, h;
 	MancalaStone *stone, *s_next;
 	float loc8;
+	char buffer[64];
 	
 	j->mapa[0] = j->mapa[1] = j->mapa[2] = j->mapa[3] = j->mapa[4] = j->mapa[5] = 4;
 	j->mapa[7] = j->mapa[8] = j->mapa[9] = j->mapa[10] = j->mapa[11] = j->mapa[12] = 4;
 	j->mapa[6] = j->mapa[13] = 0;
+	
+	j->score = j->score_other = 24;
 	
 	color = 0;
 	

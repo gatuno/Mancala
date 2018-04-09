@@ -85,6 +85,9 @@ typedef struct _Juego {
 	
 	MancalaStone *tablero[14];
 	
+	/* Los scores */
+	int score, score_other;
+	
 	/* Quién inicia el juego y quién está jugando */
 	int inicio;
 	int turno;
